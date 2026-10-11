@@ -22,7 +22,7 @@ export default function Navbar() {
           Mi Perfil
         </button>
         <button 
-          onClick={() => navigate('/login')}
+          onClick={() => navigate('/')}
           style={{ cursor: 'pointer', backgroundColor: '#ef4444', color: 'white', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '4px' }}
         >
           Cerrar Sesión

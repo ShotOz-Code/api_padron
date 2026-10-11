@@ -8,8 +8,20 @@ export default function Login() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Obtener fecha y hora actual y guardarla en localStorage
+    const ahora = new Date().toLocaleString('es-MX', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    localStorage.setItem('ultimoAcceso', ahora);
+
     navigate('/dashboard');
-  };
+  }
 
   return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>

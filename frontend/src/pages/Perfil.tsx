@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 
@@ -7,7 +7,7 @@ export default function Perfil() {
     username: 'admin',
     rol: 'Administrador del Sistema',
     email: 'admin@sistema.local',
-    ultimoAcceso: '2026-10-10 11:56 a.m.'
+    ultimoAcceso: localStorage.getItem('ultimoAcceso') || 'Primer inicio de sesión'
   });
 
   const [mensaje, setMensaje] = useState('');
