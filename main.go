@@ -197,6 +197,21 @@ func migrar(db *sql.DB) error {
 			return err
 		}
 	}
+	_, _ = db.Exec(`ALTER TABLE puestos ADD COLUMN jefe_puesto_id INTEGER REFERENCES puestos(id)`)
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS vacantes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        titulo TEXT NOT NULL,
+        puesto_id INTEGER NOT NULL REFERENCES puestos(id),
+        sucursal_id INTEGER NOT NULL REFERENCES sucursales(id),
+        empleado_id INTEGER REFERENCES empleados(id),
+        estado TEXT NOT NULL DEFAULT 'DISPONIBLE' CHECK(estado IN ('DISPONIBLE','CUBIERTA','PAUSADA','CANCELADA')),
+        sueldo_ofertado_centavos INTEGER NOT NULL DEFAULT 0,
+        requisitos TEXT,
+        creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        cubierta_en TEXT
+    )`)
+	_, _ = db.Exec(`ALTER TABLE empleados ADD COLUMN vacante_id INTEGER REFERENCES vacantes(id)`)
 	return nil
 }
 
@@ -224,6 +239,19 @@ func datosIniciales(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
+		_, _ = db.Exec(`UPDATE puestos SET jefe_puesto_id=(SELECT id FROM puestos WHERE nombre='Maestro Carnitero') WHERE nombre IN ('Parrillero','Tablajero')`)
+		_, _ = db.Exec(`UPDATE puestos SET jefe_puesto_id=(SELECT id FROM puestos WHERE nombre='Cajero') WHERE nombre IN ('Mesero','Limpieza')`)
+	}
+	var conteoVacantes int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM vacantes`).Scan(&conteoVacantes); err == nil && conteoVacantes == 0 {
+		_, _ = db.Exec(`INSERT INTO vacantes(codigo,titulo,puesto_id,sucursal_id,estado,sueldo_ofertado_centavos,requisitos) VALUES
+            ('VAC-001','Maestro Carnitero Titular',1,1,'DISPONIBLE',450000,'Responsable de cazo y cocción lenta'),
+            ('VAC-002','Parrillero de Turno Matutino',2,1,'DISPONIBLE',350000,'Especialista en asador y brasas'),
+            ('VAC-003','Parrillero de Turno Vespertino',2,1,'DISPONIBLE',350000,'Especialista en asador y brasas'),
+            ('VAC-004','Tablajero de Preparación',3,1,'DISPONIBLE',320000,'Cortes y preparación de piezas'),
+            ('VAC-005','Cajero de Operación',5,1,'DISPONIBLE',300000,'Cobro, caja y arqueos'),
+            ('VAC-006','Mesero de Salón y Terraza',4,1,'DISPONIBLE',250000,'Atención directa al cliente'),
+            ('VAC-007','Auxiliar de Limpieza',6,1,'DISPONIBLE',220000,'Aseo e higiene operativa')`)
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM usuarios WHERE nombre_usuario='admin'`).Scan(&conteo); err != nil {
 		return err
@@ -239,10 +267,26 @@ func datosIniciales(db *sql.DB) error {
 	return nil
 }
 
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func (a *aplicacion) enrutador() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery(), limiteCuerpo())
+	r.Use(corsMiddleware(), gin.Logger(), gin.Recovery(), limiteCuerpo())
 	r.GET("/salud", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"estado": "activo", "servicio": "PADRÓN RH API", "hora": time.Now().Format(time.RFC3339)})
 	})
@@ -269,8 +313,12 @@ func (a *aplicacion) enrutador() *gin.Engine {
 	gestion.Use(requerirRoles(rolRH, rolEncargado))
 	gestion.GET("/empleados", a.listarEmpleados)
 	gestion.GET("/empleados/:id", a.obtenerEmpleado)
+	gestion.GET("/empleados/:id/kardex", a.obtenerKardexEmpleado)
 	gestion.POST("/empleados", a.crearEmpleado)
 	gestion.PATCH("/empleados/:id", a.actualizarEmpleado)
+	gestion.GET("/vacantes", a.listarVacantes)
+	gestion.POST("/vacantes/:id/asignar", a.asignarVacante)
+	gestion.POST("/vacantes/:id/liberar", a.liberarVacante)
 	gestion.GET("/turnos", a.listarTurnos)
 	gestion.POST("/turnos", a.crearTurno)
 	gestion.PATCH("/turnos/:id", a.actualizarTurno)
@@ -298,6 +346,8 @@ func (a *aplicacion) enrutador() *gin.Engine {
 	rh.PATCH("/sucursales/:id", a.actualizarSucursal)
 	rh.POST("/puestos", a.crearPuesto)
 	rh.PATCH("/puestos/:id", a.actualizarPuesto)
+	rh.POST("/vacantes", a.crearVacante)
+	rh.PATCH("/vacantes/:id", a.actualizarVacante)
 	rh.GET("/usuarios", a.listarUsuarios)
 	rh.POST("/usuarios", a.crearUsuario)
 	rh.PATCH("/usuarios/:id", a.actualizarUsuario)
@@ -512,10 +562,19 @@ func (a *aplicacion) miPerfil(c *gin.Context) {
 		return
 	}
 	var e empleadoRespuesta
-	err := a.db.QueryRow(consultaEmpleado+` WHERE e.id=?`, i.EmpleadoID.Int64).Scan(&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno, &e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos, &e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo)
+	var vacanteID int64
+	err := a.db.QueryRow(consultaEmpleado+` WHERE e.id=?`, i.EmpleadoID.Int64).Scan(
+		&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno,
+		&e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos,
+		&e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo,
+		&e.JefePuesto, &e.NombreUsuario, &vacanteID, &e.VacanteCodigo, &e.VacanteTitulo,
+	)
 	if err != nil {
 		responderBD(c, err)
 		return
+	}
+	if vacanteID > 0 {
+		e.VacanteID = &vacanteID
 	}
 	c.JSON(http.StatusOK, gin.H{"usuario_id": i.UsuarioID, "rol": i.Rol, "empleado": e})
 }
@@ -555,7 +614,7 @@ func (a *aplicacion) cambiarContrasena(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"mensaje": "Contraseña actualizada correctamente"})
 }
 
-const consultaEmpleado = `SELECT e.id,e.numero_empleado,e.nombres,e.apellido_paterno,COALESCE(e.apellido_materno,''),COALESCE(e.curp,''),COALESCE(e.correo,''),COALESCE(e.telefono,''),e.fecha_ingreso,e.sueldo_semanal_centavos,e.sucursal_id,s.nombre,e.puesto_id,p.nombre,e.activo FROM empleados e JOIN sucursales s ON s.id=e.sucursal_id JOIN puestos p ON p.id=e.puesto_id`
+const consultaEmpleado = `SELECT e.id,e.numero_empleado,e.nombres,e.apellido_paterno,COALESCE(e.apellido_materno,''),COALESCE(e.curp,''),COALESCE(e.correo,''),COALESCE(e.telefono,''),e.fecha_ingreso,e.sueldo_semanal_centavos,e.sucursal_id,s.nombre,e.puesto_id,p.nombre,e.activo,COALESCE(jp.nombre,''),COALESCE(u.nombre_usuario,''),COALESCE(e.vacante_id,0),COALESCE(v.codigo,''),COALESCE(v.titulo,'') FROM empleados e JOIN sucursales s ON s.id=e.sucursal_id JOIN puestos p ON p.id=e.puesto_id LEFT JOIN puestos jp ON jp.id=p.jefe_puesto_id LEFT JOIN usuarios u ON u.empleado_id=e.id LEFT JOIN vacantes v ON v.id=e.vacante_id`
 
 type empleadoRespuesta struct {
 	ID                    int64  `json:"id"`
@@ -573,6 +632,11 @@ type empleadoRespuesta struct {
 	PuestoID              int64  `json:"puesto_id"`
 	Puesto                string `json:"puesto"`
 	Activo                int    `json:"activo"`
+	JefePuesto            string `json:"jefe_puesto"`
+	NombreUsuario         string `json:"nombre_usuario"`
+	VacanteID             *int64 `json:"vacante_id"`
+	VacanteCodigo         string `json:"vacante_codigo"`
+	VacanteTitulo         string `json:"vacante_titulo"`
 }
 
 func (a *aplicacion) listarSucursales(c *gin.Context) {
@@ -596,7 +660,10 @@ func (a *aplicacion) listarSucursales(c *gin.Context) {
 	c.JSON(http.StatusOK, resultado)
 }
 func (a *aplicacion) listarPuestos(c *gin.Context) {
-	filas, err := a.db.Query(`SELECT id,nombre,COALESCE(descripcion,''),es_critico,requiere_suplente,factor_propina,activo FROM puestos ORDER BY nombre`)
+	filas, err := a.db.Query(`SELECT p.id,p.nombre,COALESCE(p.descripcion,''),p.es_critico,p.requiere_suplente,p.factor_propina,p.activo,COALESCE(p.jefe_puesto_id,0),COALESCE(jp.nombre,''),
+		(SELECT COUNT(*) FROM empleados e WHERE e.puesto_id=p.id AND e.activo=1) AS num_empleados,
+		(SELECT COUNT(*) FROM vacantes v WHERE v.puesto_id=p.id) AS num_vacantes
+		FROM puestos p LEFT JOIN puestos jp ON jp.id=p.jefe_puesto_id ORDER BY p.nombre`)
 	if err != nil {
 		responderBD(c, err)
 		return
@@ -604,15 +671,34 @@ func (a *aplicacion) listarPuestos(c *gin.Context) {
 	defer filas.Close()
 	resultado := []gin.H{}
 	for filas.Next() {
-		var id int64
-		var nombre, desc string
+		var id, jefeID int64
+		var nombre, desc, jefeNombre string
 		var critico, suplente, activo int
 		var factor float64
-		if err := filas.Scan(&id, &nombre, &desc, &critico, &suplente, &factor, &activo); err != nil {
+		var numEmpleados, numVacantes int64
+		if err := filas.Scan(&id, &nombre, &desc, &critico, &suplente, &factor, &activo, &jefeID, &jefeNombre, &numEmpleados, &numVacantes); err != nil {
 			responderBD(c, err)
 			return
 		}
-		resultado = append(resultado, gin.H{"id": id, "nombre": nombre, "descripcion": desc, "es_critico": critico == 1, "requiere_suplente": suplente == 1, "factor_propina": factor, "activo": activo == 1})
+		item := gin.H{
+			"id":                id,
+			"nombre":            nombre,
+			"descripcion":       desc,
+			"es_critico":        critico == 1,
+			"requiere_suplente": suplente == 1,
+			"factor_propina":    factor,
+			"activo":            activo == 1,
+			"num_empleados":     numEmpleados,
+			"num_vacantes":      numVacantes,
+		}
+		if jefeID > 0 {
+			item["jefe_puesto_id"] = jefeID
+			item["jefe_puesto"] = jefeNombre
+		} else {
+			item["jefe_puesto_id"] = nil
+			item["jefe_puesto"] = nil
+		}
+		resultado = append(resultado, item)
 	}
 	c.JSON(http.StatusOK, resultado)
 }
@@ -714,6 +800,7 @@ func (a *aplicacion) crearPuesto(c *gin.Context) {
 		EsCritico        bool    `json:"es_critico"`
 		RequiereSuplente bool    `json:"requiere_suplente"`
 		FactorPropina    float64 `json:"factor_propina"`
+		JefePuestoID     *int64  `json:"jefe_puesto_id"`
 	}
 	if !leerJSON(c, &e) {
 		return
@@ -731,7 +818,7 @@ func (a *aplicacion) crearPuesto(c *gin.Context) {
 		responderError(c, 400, "factor_propina debe estar entre 0.01 y 5")
 		return
 	}
-	r, err := a.db.Exec(`INSERT INTO puestos(nombre,descripcion,es_critico,requiere_suplente,factor_propina) VALUES (?,?,?,?,?)`, nombre, strings.TrimSpace(e.Descripcion), boolAInt(e.EsCritico), boolAInt(e.RequiereSuplente), e.FactorPropina)
+	r, err := a.db.Exec(`INSERT INTO puestos(nombre,descripcion,es_critico,requiere_suplente,factor_propina,jefe_puesto_id) VALUES (?,?,?,?,?,?)`, nombre, strings.TrimSpace(e.Descripcion), boolAInt(e.EsCritico), boolAInt(e.RequiereSuplente), e.FactorPropina, e.JefePuestoID)
 	if err != nil {
 		responderError(c, 409, "Ya existe un puesto con ese nombre")
 		return
@@ -751,6 +838,7 @@ func (a *aplicacion) actualizarPuesto(c *gin.Context) {
 		EsCritico        *bool    `json:"es_critico"`
 		RequiereSuplente *bool    `json:"requiere_suplente"`
 		FactorPropina    *float64 `json:"factor_propina"`
+		JefePuestoID     *int64   `json:"jefe_puesto_id"`
 		Activo           *bool    `json:"activo"`
 	}
 	if !leerJSON(c, &e) {
@@ -759,7 +847,8 @@ func (a *aplicacion) actualizarPuesto(c *gin.Context) {
 	var nombre, desc string
 	var critico, suplente, activo int
 	var factor float64
-	err := a.db.QueryRow(`SELECT nombre,COALESCE(descripcion,''),es_critico,requiere_suplente,factor_propina,activo FROM puestos WHERE id=?`, id).Scan(&nombre, &desc, &critico, &suplente, &factor, &activo)
+	var jefeID sql.NullInt64
+	err := a.db.QueryRow(`SELECT nombre,COALESCE(descripcion,''),es_critico,requiere_suplente,factor_propina,activo,jefe_puesto_id FROM puestos WHERE id=?`, id).Scan(&nombre, &desc, &critico, &suplente, &factor, &activo, &jefeID)
 	if errors.Is(err, sql.ErrNoRows) {
 		responderError(c, 404, "Puesto no encontrado")
 		return
@@ -790,6 +879,13 @@ func (a *aplicacion) actualizarPuesto(c *gin.Context) {
 	if e.Activo != nil {
 		activo = boolAInt(*e.Activo)
 	}
+	if e.JefePuestoID != nil {
+		if *e.JefePuestoID > 0 {
+			jefeID = sql.NullInt64{Int64: *e.JefePuestoID, Valid: true}
+		} else {
+			jefeID = sql.NullInt64{Valid: false}
+		}
+	}
 	if suplente == 1 && critico == 0 {
 		responderError(c, 400, "Un puesto que requiere suplente debe ser crítico")
 		return
@@ -798,7 +894,7 @@ func (a *aplicacion) actualizarPuesto(c *gin.Context) {
 		responderError(c, 400, "factor_propina debe estar entre 0.01 y 5")
 		return
 	}
-	if _, err = a.db.Exec(`UPDATE puestos SET nombre=?,descripcion=?,es_critico=?,requiere_suplente=?,factor_propina=?,activo=? WHERE id=?`, nombre, desc, critico, suplente, factor, activo, id); err != nil {
+	if _, err = a.db.Exec(`UPDATE puestos SET nombre=?,descripcion=?,es_critico=?,requiere_suplente=?,factor_propina=?,activo=?,jefe_puesto_id=? WHERE id=?`, nombre, desc, critico, suplente, factor, activo, jefeID, id); err != nil {
 		responderError(c, 409, "No se pudo actualizar el puesto")
 		return
 	}
@@ -967,6 +1063,7 @@ type entradaEmpleado struct {
 	SueldoSemanalCentavos int64  `json:"sueldo_semanal_centavos"`
 	SucursalID            int64  `json:"sucursal_id"`
 	PuestoID              int64  `json:"puesto_id"`
+	VacanteID             *int64 `json:"vacante_id"`
 	Usuario               string `json:"usuario"`
 	Contrasena            string `json:"contrasena"`
 	Rol                   string `json:"rol"`
@@ -1070,12 +1167,19 @@ func (a *aplicacion) crearEmpleado(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-	r, err := tx.Exec(`INSERT INTO empleados(numero_empleado,nombres,apellido_paterno,apellido_materno,curp,correo,telefono,fecha_ingreso,sueldo_semanal_centavos,sucursal_id,puesto_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, e.NumeroEmpleado, e.Nombres, e.ApellidoPaterno, nuloTexto(e.ApellidoMaterno), nuloTexto(e.CURP), nuloTexto(e.Correo), nuloTexto(e.Telefono), e.FechaIngreso, e.SueldoSemanalCentavos, e.SucursalID, e.PuestoID)
+	var vacanteID any = nil
+	if e.VacanteID != nil && *e.VacanteID > 0 {
+		vacanteID = *e.VacanteID
+	}
+	r, err := tx.Exec(`INSERT INTO empleados(numero_empleado,nombres,apellido_paterno,apellido_materno,curp,correo,telefono,fecha_ingreso,sueldo_semanal_centavos,sucursal_id,puesto_id,vacante_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, e.NumeroEmpleado, e.Nombres, e.ApellidoPaterno, nuloTexto(e.ApellidoMaterno), nuloTexto(e.CURP), nuloTexto(e.Correo), nuloTexto(e.Telefono), e.FechaIngreso, e.SueldoSemanalCentavos, e.SucursalID, e.PuestoID, vacanteID)
 	if err != nil {
 		responderError(c, 409, "No se pudo crear: número, CURP o correo ya existen")
 		return
 	}
 	id, _ := r.LastInsertId()
+	if e.VacanteID != nil && *e.VacanteID > 0 {
+		_, _ = tx.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=CURRENT_TIMESTAMP WHERE id=?`, id, *e.VacanteID)
+	}
 	var usuarioID any = nil
 	if e.Usuario != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(e.Contrasena), bcrypt.DefaultCost)
@@ -1146,9 +1250,13 @@ func (a *aplicacion) listarEmpleados(c *gin.Context) {
 	resultado := []empleadoRespuesta{}
 	for filas.Next() {
 		var e empleadoRespuesta
-		if err := filas.Scan(&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno, &e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos, &e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo); err != nil {
+		var vacanteID int64
+		if err := filas.Scan(&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno, &e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos, &e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo, &e.JefePuesto, &e.NombreUsuario, &vacanteID, &e.VacanteCodigo, &e.VacanteTitulo); err != nil {
 			responderBD(c, err)
 			return
+		}
+		if vacanteID > 0 {
+			e.VacanteID = &vacanteID
 		}
 		resultado = append(resultado, e)
 	}
@@ -1160,7 +1268,8 @@ func (a *aplicacion) obtenerEmpleado(c *gin.Context) {
 		return
 	}
 	var e empleadoRespuesta
-	err := a.db.QueryRow(consultaEmpleado+` WHERE e.id=?`, id).Scan(&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno, &e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos, &e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo)
+	var vacanteID int64
+	err := a.db.QueryRow(consultaEmpleado+` WHERE e.id=?`, id).Scan(&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno, &e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos, &e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo, &e.JefePuesto, &e.NombreUsuario, &vacanteID, &e.VacanteCodigo, &e.VacanteTitulo)
 	if errors.Is(err, sql.ErrNoRows) {
 		responderError(c, 404, "Empleado no encontrado")
 		return
@@ -1168,6 +1277,9 @@ func (a *aplicacion) obtenerEmpleado(c *gin.Context) {
 	if err != nil {
 		responderBD(c, err)
 		return
+	}
+	if vacanteID > 0 {
+		e.VacanteID = &vacanteID
 	}
 	c.JSON(200, e)
 }
@@ -1179,6 +1291,7 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 	var entrada struct {
 		SucursalID            *int64  `json:"sucursal_id"`
 		PuestoID              *int64  `json:"puesto_id"`
+		VacanteID             *int64  `json:"vacante_id"`
 		SueldoSemanalCentavos *int64  `json:"sueldo_semanal_centavos"`
 		Correo                *string `json:"correo"`
 		Telefono              *string `json:"telefono"`
@@ -1239,6 +1352,17 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 		responderError(c, 409, "No se pudo actualizar el empleado; correo duplicado")
 		return
 	}
+	if entrada.VacanteID != nil {
+		nuevaVacante := *entrada.VacanteID
+		if nuevaVacante > 0 {
+			_, _ = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL WHERE empleado_id=? AND id!=?`, id, nuevaVacante)
+			_, _ = a.db.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=CURRENT_TIMESTAMP WHERE id=?`, id, nuevaVacante)
+			_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=? WHERE id=?`, nuevaVacante, id)
+		} else {
+			_, _ = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL WHERE empleado_id=?`, id)
+			_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=NULL WHERE id=?`, id)
+		}
+	}
 	hoy := time.Now().Format("2006-01-02")
 	if puesto != puestoAnterior {
 		_ = a.registrarHistorico(id, "CAMBIO_PUESTO", fmt.Sprintf("Cambio de puesto %d a %d", puestoAnterior, puesto), hoy)
@@ -1248,6 +1372,366 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ACTUALIZAR", "EMPLEADO", id, "Datos laborales actualizados")
 	c.JSON(200, gin.H{"mensaje": "Empleado actualizado correctamente"})
+}
+
+func (a *aplicacion) obtenerKardexEmpleado(c *gin.Context) {
+	id, ok := enteroParametro(c, "id")
+	if !ok {
+		return
+	}
+	var e empleadoRespuesta
+	var vacanteID int64
+	err := a.db.QueryRow(consultaEmpleado+` WHERE e.id=?`, id).Scan(
+		&e.ID, &e.NumeroEmpleado, &e.Nombres, &e.ApellidoPaterno, &e.ApellidoMaterno,
+		&e.CURP, &e.Correo, &e.Telefono, &e.FechaIngreso, &e.SueldoSemanalCentavos,
+		&e.SucursalID, &e.Sucursal, &e.PuestoID, &e.Puesto, &e.Activo,
+		&e.JefePuesto, &e.NombreUsuario, &vacanteID, &e.VacanteCodigo, &e.VacanteTitulo,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		responderError(c, 404, "Empleado no encontrado")
+		return
+	}
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	if vacanteID > 0 {
+		e.VacanteID = &vacanteID
+	}
+
+	diasAntiguedad := 0
+	if t, err := time.Parse("2006-01-02", e.FechaIngreso); err == nil {
+		diasAntiguedad = int(time.Since(t).Hours() / 24)
+		if diasAntiguedad < 0 {
+			diasAntiguedad = 0
+		}
+	}
+
+	var saldoTotalCentavos int64 = 0
+	var totalPrestamosActivos int = 0
+	_ = a.db.QueryRow(`SELECT COALESCE(SUM(saldo_centavos), 0), COUNT(*) FROM prestamos_empleado WHERE empleado_id=? AND estado='APROBADO' AND saldo_centavos > 0`, id).Scan(&saldoTotalCentavos, &totalPrestamosActivos)
+
+	filasInc, err := a.db.Query(`SELECT id, tipo, descripcion, fecha_evento, creado_en FROM historico_incidencias WHERE empleado_id=? ORDER BY fecha_evento DESC, id DESC`, id)
+	incidencias := []gin.H{}
+	if err == nil {
+		defer filasInc.Close()
+		for filasInc.Next() {
+			var iID int64
+			var tipo, desc, fecha, creado string
+			if err := filasInc.Scan(&iID, &tipo, &desc, &fecha, &creado); err == nil {
+				incidencias = append(incidencias, gin.H{
+					"id":           iID,
+					"tipo":         tipo,
+					"descripcion":  desc,
+					"fecha_evento": fecha,
+					"creado_en":    creado,
+				})
+			}
+		}
+	}
+
+	filasPerm, err := a.db.Query(`SELECT sp.id, sp.tipo, sp.fecha_inicio, sp.fecha_fin, sp.motivo, sp.estado, sp.requiere_cobertura, COALESCE(sp.observacion_dictamen, ''), sp.creado_en, COALESCE(se.nombres||' '||se.apellido_paterno, '') FROM solicitudes_permisos sp LEFT JOIN cobertura_turnos ct ON ct.solicitud_id=sp.id LEFT JOIN empleados se ON se.id=ct.suplente_id WHERE sp.empleado_id=? ORDER BY sp.fecha_inicio DESC`, id)
+	permisos := []gin.H{}
+	if err == nil {
+		defer filasPerm.Close()
+		for filasPerm.Next() {
+			var pID int64
+			var tipo, inicio, fin, motivo, estado, obs, creado, suplente string
+			var reqCob int
+			if err := filasPerm.Scan(&pID, &tipo, &inicio, &fin, &motivo, &estado, &reqCob, &obs, &creado, &suplente); err == nil {
+				permisos = append(permisos, gin.H{
+					"id":                   pID,
+					"tipo":                 tipo,
+					"fecha_inicio":         inicio,
+					"fecha_fin":            fin,
+					"motivo":               motivo,
+					"estado":               estado,
+					"requiere_cobertura":   reqCob == 1,
+					"observacion_dictamen": obs,
+					"suplente":             suplente,
+					"creado_en":            creado,
+				})
+			}
+		}
+	}
+
+	filasPrest, err := a.db.Query(`SELECT id, monto_original_centavos, saldo_centavos, descuento_semanal_centavos, numero_semanas, motivo, estado, COALESCE(observacion_dictamen, ''), creado_en, COALESCE(aprobado_en, '') FROM prestamos_empleado WHERE empleado_id=? ORDER BY id DESC`, id)
+	prestamos := []gin.H{}
+	if err == nil {
+		defer filasPrest.Close()
+		for filasPrest.Next() {
+			var prID, monto, saldo, desc int64
+			var semanas int
+			var motivo, estado, obs, creado, aprobado string
+			if err := filasPrest.Scan(&prID, &monto, &saldo, &desc, &semanas, &motivo, &estado, &obs, &creado, &aprobado); err == nil {
+				prestamos = append(prestamos, gin.H{
+					"id":                        prID,
+					"monto_original_centavos":   monto,
+					"saldo_centavos":            saldo,
+					"descuento_semanal_centavos": desc,
+					"numero_semanas":            semanas,
+					"motivo":                    motivo,
+					"estado":                    estado,
+					"observacion_dictamen":      obs,
+					"creado_en":                 creado,
+					"aprobado_en":               aprobado,
+				})
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"empleado": e,
+		"estadisticas": gin.H{
+			"dias_antiguedad":          diasAntiguedad,
+			"saldo_prestamos_centavos": saldoTotalCentavos,
+			"total_prestamos_activos":  totalPrestamosActivos,
+			"total_incidencias":        len(incidencias),
+			"total_permisos":           len(permisos),
+		},
+		"incidencias": incidencias,
+		"permisos":    permisos,
+		"prestamos":   prestamos,
+	})
+}
+
+func (a *aplicacion) listarVacantes(c *gin.Context) {
+	q := `SELECT v.id, v.codigo, v.titulo, v.puesto_id, p.nombre, v.sucursal_id, s.nombre,
+	             COALESCE(v.empleado_id, 0), COALESCE(e.nombres || ' ' || e.apellido_paterno, ''),
+	             v.estado, v.sueldo_ofertado_centavos, COALESCE(v.requisitos, ''), v.creado_en, COALESCE(v.cubierta_en, '')
+	      FROM vacantes v
+	      JOIN puestos p ON p.id = v.puesto_id
+	      JOIN sucursales s ON s.id = v.sucursal_id
+	      LEFT JOIN empleados e ON e.id = v.empleado_id`
+	args := []any{}
+	conds := []string{}
+	if sid := c.Query("sucursal_id"); sid != "" {
+		if id, err := strconv.ParseInt(sid, 10, 64); err == nil && id > 0 {
+			conds = append(conds, "v.sucursal_id = ?")
+			args = append(args, id)
+		}
+	}
+	if pid := c.Query("puesto_id"); pid != "" {
+		if id, err := strconv.ParseInt(pid, 10, 64); err == nil && id > 0 {
+			conds = append(conds, "v.puesto_id = ?")
+			args = append(args, id)
+		}
+	}
+	if est := c.Query("estado"); est != "" {
+		conds = append(conds, "v.estado = ?")
+		args = append(args, normalizarMayusculas(est))
+	}
+	if len(conds) > 0 {
+		q += " WHERE " + strings.Join(conds, " AND ")
+	}
+	q += " ORDER BY v.estado ASC, v.codigo ASC"
+
+	filas, err := a.db.Query(q, args...)
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	defer filas.Close()
+
+	resultado := []gin.H{}
+	for filas.Next() {
+		var id, puestoID, sucursalID, empID, sueldo int64
+		var codigo, titulo, puesto, sucursal, empNombre, estado, req, creado, cubierta string
+		if err := filas.Scan(&id, &codigo, &titulo, &puestoID, &puesto, &sucursalID, &sucursal, &empID, &empNombre, &estado, &sueldo, &req, &creado, &cubierta); err != nil {
+			responderBD(c, err)
+			return
+		}
+		item := gin.H{
+			"id":                      id,
+			"codigo":                  codigo,
+			"titulo":                  titulo,
+			"puesto_id":               puestoID,
+			"puesto":                  puesto,
+			"sucursal_id":             sucursalID,
+			"sucursal":                sucursal,
+			"estado":                  estado,
+			"sueldo_ofertado_centavos": sueldo,
+			"requisitos":              req,
+			"creado_en":               creado,
+		}
+		if empID > 0 {
+			item["empleado_id"] = empID
+			item["empleado"] = empNombre
+			item["cubierta_en"] = cubierta
+		} else {
+			item["empleado_id"] = nil
+			item["empleado"] = nil
+			item["cubierta_en"] = nil
+		}
+		resultado = append(resultado, item)
+	}
+	c.JSON(http.StatusOK, resultado)
+}
+
+func (a *aplicacion) crearVacante(c *gin.Context) {
+	var e struct {
+		Codigo                 string `json:"codigo"`
+		Titulo                 string `json:"titulo"`
+		PuestoID               int64  `json:"puesto_id"`
+		SucursalID             int64  `json:"sucursal_id"`
+		SueldoOfertadoCentavos int64  `json:"sueldo_ofertado_centavos"`
+		Requisitos             string `json:"requisitos"`
+	}
+	if !leerJSON(c, &e) {
+		return
+	}
+	codigo, err := textoRequerido(e.Codigo, 30, "código")
+	if err != nil {
+		responderError(c, 400, err.Error())
+		return
+	}
+	titulo, err := textoRequerido(e.Titulo, 150, "título")
+	if err != nil {
+		responderError(c, 400, err.Error())
+		return
+	}
+	if err := a.validarSucursalYPuesto(e.SucursalID, e.PuestoID); err != nil {
+		responderError(c, 400, err.Error())
+		return
+	}
+	r, err := a.db.Exec(`INSERT INTO vacantes(codigo, titulo, puesto_id, sucursal_id, estado, sueldo_ofertado_centavos, requisitos) VALUES (?,?,?,?,'DISPONIBLE',?,?)`, codigo, titulo, e.PuestoID, e.SucursalID, e.SueldoOfertadoCentavos, strings.TrimSpace(e.Requisitos))
+	if err != nil {
+		responderError(c, 409, "Ya existe una vacante con ese código")
+		return
+	}
+	id, _ := r.LastInsertId()
+	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "CREAR", "VACANTE", id, codigo)
+	c.JSON(201, gin.H{"id": id, "mensaje": "Vacante creada correctamente"})
+}
+
+func (a *aplicacion) actualizarVacante(c *gin.Context) {
+	id, ok := enteroParametro(c, "id")
+	if !ok {
+		return
+	}
+	var e struct {
+		Titulo                 *string `json:"titulo"`
+		PuestoID               *int64  `json:"puesto_id"`
+		SucursalID             *int64  `json:"sucursal_id"`
+		Estado                 *string `json:"estado"`
+		SueldoOfertadoCentavos *int64  `json:"sueldo_ofertado_centavos"`
+		Requisitos             *string `json:"requisitos"`
+	}
+	if !leerJSON(c, &e) {
+		return
+	}
+	var titulo, estado, requisitos string
+	var puestoID, sucursalID, sueldo int64
+	var empID sql.NullInt64
+	err := a.db.QueryRow(`SELECT titulo, puesto_id, sucursal_id, estado, sueldo_ofertado_centavos, COALESCE(requisitos,''), empleado_id FROM vacantes WHERE id=?`, id).Scan(&titulo, &puestoID, &sucursalID, &estado, &sueldo, &requisitos, &empID)
+	if errors.Is(err, sql.ErrNoRows) {
+		responderError(c, 404, "Vacante no encontrada")
+		return
+	}
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	if e.Titulo != nil {
+		titulo, err = textoRequerido(*e.Titulo, 150, "título")
+		if err != nil {
+			responderError(c, 400, err.Error())
+			return
+		}
+	}
+	if e.PuestoID != nil {
+		puestoID = *e.PuestoID
+	}
+	if e.SucursalID != nil {
+		sucursalID = *e.SucursalID
+	}
+	if e.SueldoOfertadoCentavos != nil {
+		sueldo = *e.SueldoOfertadoCentavos
+	}
+	if e.Requisitos != nil {
+		requisitos = strings.TrimSpace(*e.Requisitos)
+	}
+	if e.Estado != nil {
+		nuevoEstado := normalizarMayusculas(*e.Estado)
+		if nuevoEstado != "DISPONIBLE" && nuevoEstado != "CUBIERTA" && nuevoEstado != "PAUSADA" && nuevoEstado != "CANCELADA" {
+			responderError(c, 400, "Estado de vacante inválido")
+			return
+		}
+		estado = nuevoEstado
+	}
+	if err := a.validarSucursalYPuesto(sucursalID, puestoID); err != nil {
+		responderError(c, 400, err.Error())
+		return
+	}
+	_, err = a.db.Exec(`UPDATE vacantes SET titulo=?, puesto_id=?, sucursal_id=?, estado=?, sueldo_ofertado_centavos=?, requisitos=? WHERE id=?`, titulo, puestoID, sucursalID, estado, sueldo, requisitos, id)
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ACTUALIZAR", "VACANTE", id, titulo)
+	c.JSON(200, gin.H{"mensaje": "Vacante actualizada correctamente"})
+}
+
+func (a *aplicacion) asignarVacante(c *gin.Context) {
+	id, ok := enteroParametro(c, "id")
+	if !ok {
+		return
+	}
+	var e struct {
+		EmpleadoID int64 `json:"empleado_id"`
+	}
+	if !leerJSON(c, &e) {
+		return
+	}
+	if e.EmpleadoID <= 0 {
+		responderError(c, 400, "empleado_id debe ser positivo")
+		return
+	}
+	var puestoID, sucursalID int64
+	err := a.db.QueryRow(`SELECT puesto_id, sucursal_id FROM vacantes WHERE id=?`, id).Scan(&puestoID, &sucursalID)
+	if errors.Is(err, sql.ErrNoRows) {
+		responderError(c, 404, "Vacante no encontrada")
+		return
+	}
+	var empNombre string
+	err = a.db.QueryRow(`SELECT nombres||' '||apellido_paterno FROM empleados WHERE id=?`, e.EmpleadoID).Scan(&empNombre)
+	if errors.Is(err, sql.ErrNoRows) {
+		responderError(c, 404, "Empleado no encontrado")
+		return
+	}
+	_, _ = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL WHERE empleado_id=?`, e.EmpleadoID)
+	_, err = a.db.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=CURRENT_TIMESTAMP WHERE id=?`, e.EmpleadoID, id)
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=?, puesto_id=?, sucursal_id=? WHERE id=?`, id, puestoID, sucursalID, e.EmpleadoID)
+
+	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ASIGNAR", "VACANTE", id, fmt.Sprintf("Asignada a %s", empNombre))
+	c.JSON(200, gin.H{"mensaje": fmt.Sprintf("Vacante asignada exitosamente a %s", empNombre)})
+}
+
+func (a *aplicacion) liberarVacante(c *gin.Context) {
+	id, ok := enteroParametro(c, "id")
+	if !ok {
+		return
+	}
+	var empID sql.NullInt64
+	err := a.db.QueryRow(`SELECT empleado_id FROM vacantes WHERE id=?`, id).Scan(&empID)
+	if errors.Is(err, sql.ErrNoRows) {
+		responderError(c, 404, "Vacante no encontrada")
+		return
+	}
+	if empID.Valid && empID.Int64 > 0 {
+		_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=NULL WHERE id=?`, empID.Int64)
+	}
+	_, err = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL, cubierta_en=NULL WHERE id=?`, id)
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "LIBERAR", "VACANTE", id, "Vacante liberada a disponible")
+	c.JSON(200, gin.H{"mensaje": "Vacante liberada y disponible para nueva asignación"})
 }
 
 func (a *aplicacion) empleadoActivo(id int64) error {

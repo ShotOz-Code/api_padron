@@ -1,39 +1,50 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AutenticacionService } from '../services/api';
 import './Login.css';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin');
+  const [password, setPassword] = useState('Cambiar123!');
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [recordarme, setRecordarme] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
 
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError('');
 
     const usuario = email.trim();
-
     if (!usuario || !password) {
+      setError('Ingresa tu usuario y contraseña.');
       return;
     }
 
-    const ahora = new Date().toLocaleString('es-MX', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    setCargando(true);
+    try {
+      await AutenticacionService.iniciarSesion({ usuario, contrasena: password });
 
-    localStorage.setItem('ultimoAcceso', ahora);
+      const ahora = new Date().toLocaleString('es-MX', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+      localStorage.setItem('ultimoAcceso', ahora);
 
-    // Solo para pruebas: falta validar las credenciales con la API.
-    navigate('/dashboard', {
-      state: { usuario, recordarme },
-    });
+      navigate('/dashboard', {
+        state: { usuario, recordarme },
+      });
+    } catch (err: any) {
+      setError(err.message || 'Usuario o contraseña incorrectos');
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
@@ -67,6 +78,21 @@ export default function Login() {
           <h1>Bienvenido de nuevo</h1>
           <p>Ingresa tus credenciales para continuar.</p>
         </div>
+
+        {error && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            color: '#fca5a5',
+            padding: '10px 14px',
+            borderRadius: '12px',
+            fontSize: '13px',
+            marginBottom: '18px',
+            textAlign: 'center'
+          }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
@@ -159,8 +185,8 @@ export default function Login() {
             </button>
           </div>
 
-          <button type="submit" className="login-button">
-            <span>Iniciar sesión</span>
+          <button type="submit" className="login-button" disabled={cargando}>
+            <span>{cargando ? 'Iniciando sesión...' : 'Iniciar sesión'}</span>
             <span className="button-arrow" aria-hidden="true">
               →
             </span>

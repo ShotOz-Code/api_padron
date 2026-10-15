@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -71,8 +73,16 @@ func TestFlujoPermisoCriticoConSuplente(t *testing.T) {
 		}
 	}
 	ana := tokenDe(t, r, "ana", "Secreta123!")
-	// 11 de octubre de 2026 es domingo: el puesto de Parrillero requiere cobertura.
-	res := llamada(t, r, http.MethodPost, "/api/v1/solicitudes-permisos", ana, `{"tipo":"DESCANSO","fecha_inicio":"2026-10-11","fecha_fin":"2026-10-11","motivo":"Asunto familiar","suplente_id":2}`)
+	// El puesto de Parrillero es crítico y en fin de semana (domingo) requiere suplente.
+	hoy := time.Now()
+	diasHastaDomingo := (7 - int(hoy.Weekday())) % 7
+	if diasHastaDomingo == 0 {
+		diasHastaDomingo = 7
+	}
+	domingo := hoy.AddDate(0, 0, diasHastaDomingo).Format("2006-01-02")
+
+	solicitudCuerpo := fmt.Sprintf(`{"tipo":"DESCANSO","fecha_inicio":"%s","fecha_fin":"%s","motivo":"Asunto familiar","suplente_id":2}`, domingo, domingo)
+	res := llamada(t, r, http.MethodPost, "/api/v1/solicitudes-permisos", ana, solicitudCuerpo)
 	if res.Code != http.StatusCreated {
 		t.Fatalf("crear solicitud: %d %s", res.Code, res.Body.String())
 	}
@@ -100,5 +110,67 @@ func TestRequiereAutenticacion(t *testing.T) {
 	res := llamada(t, a.enrutador(), http.MethodGet, "/api/v1/empleados", "", "")
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("se esperaba 401, llegó %d", res.Code)
+	}
+}
+
+func TestKardexYVacantes(t *testing.T) {
+	a := nuevaAPIPrueba(t)
+	r := a.enrutador()
+	admin := tokenDe(t, r, "admin", "Cambiar123!")
+
+	// 1. Listar vacantes iniciales
+	res := llamada(t, r, http.MethodGet, "/api/v1/vacantes", admin, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("listar vacantes: %d %s", res.Code, res.Body.String())
+	}
+
+	// 2. Crear una nueva vacante
+	nuevaVac := `{"codigo":"VAC-TEST01","titulo":"Parrillero de Fin de Semana","puesto_id":2,"sucursal_id":1,"sueldo_ofertado_centavos":320000,"requisitos":"Disponibilidad sábado y domingo"}`
+	res = llamada(t, r, http.MethodPost, "/api/v1/vacantes", admin, nuevaVac)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("crear vacante: %d %s", res.Code, res.Body.String())
+	}
+
+	// 3. Crear empleado
+	empleadoJson := `{"numero_empleado":"EMP-100","nombres":"Carlos","apellido_paterno":"Gómez","fecha_ingreso":"2026-01-15","sueldo_semanal_centavos":250000,"sucursal_id":1,"puesto_id":2,"usuario":"carlos","contrasena":"Clave123!4"}`
+	res = llamada(t, r, http.MethodPost, "/api/v1/empleados", admin, empleadoJson)
+	if res.Code != http.StatusCreated {
+		t.Fatalf("crear empleado: %d %s", res.Code, res.Body.String())
+	}
+	var empCreado struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal(res.Body.Bytes(), &empCreado)
+
+	// 4. Asignar vacante al empleado
+	res = llamada(t, r, http.MethodPost, "/api/v1/vacantes/1/asignar", admin, fmt.Sprintf(`{"empleado_id":%d}`, empCreado.ID))
+	if res.Code != http.StatusOK {
+		t.Fatalf("asignar vacante: %d %s", res.Code, res.Body.String())
+	}
+
+	// 5. Consultar Kardex del empleado
+	res = llamada(t, r, http.MethodGet, fmt.Sprintf("/api/v1/empleados/%d/kardex", empCreado.ID), admin, "")
+	if res.Code != http.StatusOK {
+		t.Fatalf("obtener kardex: %d %s", res.Code, res.Body.String())
+	}
+	var kardexResp struct {
+		Empleado struct {
+			ID             int64  `json:"id"`
+			NumeroEmpleado string `json:"numero_empleado"`
+			Nombres        string `json:"nombres"`
+			VacanteCodigo  string `json:"vacante_codigo"`
+		} `json:"empleado"`
+		Estadisticas struct {
+			DiasAntiguedad int `json:"dias_antiguedad"`
+		} `json:"estadisticas"`
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &kardexResp); err != nil {
+		t.Fatal(err)
+	}
+	if kardexResp.Empleado.NumeroEmpleado != "EMP-100" {
+		t.Fatalf("empleado incorrecto en kardex: %s", kardexResp.Empleado.NumeroEmpleado)
+	}
+	if kardexResp.Empleado.VacanteCodigo != "VAC-001" {
+		t.Fatalf("vacante no asignada correctamente: %s", kardexResp.Empleado.VacanteCodigo)
 	}
 }
