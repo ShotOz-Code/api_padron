@@ -11,6 +11,7 @@
     "build:backend": "go build -trimpath -ldflags=\"-s -w\" -o ./entregable/padron.exe .",
     "build:frontend": "npm --prefix frontend run build",
     "build": "npm run build:backend && npm run build:frontend",
+    "package": "npm run build:backend && npm --prefix frontend run build:electron",
     "test": "go test ./..."
   },
   "dependencies": {

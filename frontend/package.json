@@ -9,7 +9,7 @@
     "dev:vite": "vite",
     "start:electron": "electron .",
     "build": "tsc && vite build",
-    "build:electron": "npm run build && electron-builder --win portable",
+    "build:electron": "npm run build && electron-builder --win",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -57,7 +57,8 @@
     ],
     "win": {
       "target": [
-        "portable"
+        "portable",
+        "nsis"
       ]
     }
   }
