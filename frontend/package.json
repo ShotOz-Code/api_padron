@@ -53,13 +53,28 @@
       {
         "from": "recursos/padron.exe",
         "to": "backend/padron.exe"
+      },
+      {
+        "from": "recursos/padron.db",
+        "to": "backend/padron.db"
       }
     ],
     "win": {
+      "icon": "electron/icon.ico",
       "target": [
         "portable",
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/icon.ico",
+      "uninstallerIcon": "electron/icon.ico",
+      "shortcutName": "PADRÓN RH"
+    },
+    "portable": {
+      "artifactName": "PADRON RH Portable.exe"
     }
   }
 }

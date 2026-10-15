@@ -1,9 +1,12 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
 const { mkdir } = require('node:fs/promises');
 const fs = require('node:fs');
 const path = require('node:path');
+
+// Desactivar el menú estándar de Electron/Chromium (File, Edit, View, Help, etc.)
+Menu.setApplicationMenu(null);
 
 let apiProcess = null;
 let baseApi = '';
@@ -61,6 +64,31 @@ async function iniciarApi() {
   const carpetaDatos = path.join(raizDatos, 'PADRON-datos');
   await mkdir(carpetaDatos, { recursive: true });
 
+  const rutaBd = path.join(carpetaDatos, 'padron.db');
+
+  // Si es una máquina limpia y aún no existe la BD en la ruta de datos,
+  // copiar la base inicial preconfigurada si existe en los recursos empaquetados.
+  if (!fs.existsSync(rutaBd)) {
+    const semillas = [
+      path.join(process.resourcesPath, 'backend', 'padron.db'),
+      path.resolve(__dirname, '..', 'recursos', 'padron.db'),
+      path.resolve(__dirname, '..', '..', 'entregable', 'padron.db'),
+      path.resolve(process.cwd(), 'recursos', 'padron.db'),
+      path.resolve(process.cwd(), 'entregable', 'padron.db'),
+    ];
+    for (const sem of semillas) {
+      if (fs.existsSync(sem)) {
+        try {
+          fs.copyFileSync(sem, rutaBd);
+          console.log(`[PADRON] Base de datos semilla inicial copiada desde ${sem}`);
+          break;
+        } catch (e) {
+          console.warn('[PADRON] Aviso al copiar base de datos semilla:', e);
+        }
+      }
+    }
+  }
+
   let ejecutable = '';
   if (app.isPackaged) {
     ejecutable = path.join(process.resourcesPath, 'backend', 'padron.exe');
@@ -86,7 +114,6 @@ async function iniciarApi() {
 
   const puerto = await puertoLibre();
   baseApi = `http://127.0.0.1:${puerto}`;
-  const rutaBd = path.join(carpetaDatos, 'padron.db');
 
   console.log(`[PADRON] Iniciando API en ${baseApi} con BD en ${rutaBd}`);
   apiProcess = spawn(ejecutable, ['-puerto', String(puerto), '-bd', rutaBd], {
@@ -127,17 +154,28 @@ ipcMain.on('padron:get-api-url', (event) => {
 });
 
 async function createWindow() {
+  const rutaIcono = path.join(__dirname, 'icon.ico');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 1024,
     minHeight: 700,
     title: 'PADRÓN — Recursos Humanos y Operación',
+    icon: fs.existsSync(rutaIcono) ? rutaIcono : undefined,
+    autoHideMenuBar: true,
+    show: false,
+    backgroundColor: '#faf7f2',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      devTools: !app.isPackaged,
     },
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
   });
 
   mainWindow.on('closed', () => {
