@@ -1,75 +1,33 @@
-# React + TypeScript + Vite
+# PADRÓN RH — Paquete Frontend y Contenedor Electron
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación de interfaz de usuario para **Carnitas y Carne Asada PADRÓN**, construida con **React 19 + TypeScript + Vite 8 + Tailwind CSS v4 + Electron 44**.
 
-Currently, two official plugins are available:
+Para consultar la arquitectura detallada de componentes, diseño y servicios, revisa [`../DOCUMENTACION_FRONTEND.md`](../DOCUMENTACION_FRONTEND.md) y el [`../MANUAL_TECNICO_Y_FLUJO.md`](../MANUAL_TECNICO_Y_FLUJO.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Scripts Disponibles
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Dentro del directorio `frontend/`:
 
-## Expanding the ESLint configuration
+| Comando | Descripción |
+| :--- | :--- |
+| `npm run dev:vite` | Inicia únicamente el servidor de desarrollo de Vite en `http://localhost:5173` (con proxy hacia `127.0.0.1:8080`). |
+| `npm run start:electron` | Inicia la ventana de Electron levantando automáticamente el binario `padron.exe`. |
+| `npm run dev` | Ejecuta simultáneamente el servidor Vite y la ventana de Electron con recarga en caliente. |
+| `npm run build` | Compila TypeScript (`tsc`) y genera el bundle de producción en `frontend/dist/`. |
+| `npm run build:electron` | Compila el frontend y empaqueta los ejecutables de Windows (`PADRON RH Portable.exe` y `PADRON RH Setup 1.0.0.exe`) en `frontend/dist/`. |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+> **Nota para redes con inspección SSL/TLS corporativa:** Si al ejecutar `electron-builder` por primera vez ocurre un error de certificado al descargar herramientas de construcción, ejecuta:
+> ```powershell
+> $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; $env:NODE_OPTIONS="--use-system-ca"; npm run build:electron
+> ```
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Recursos Embebidos (`extraResources`)
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
-
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+Al empaquetar con `electron-builder`, se incluyen automáticamente dentro de `resources/backend/`:
+1. `recursos/padron.exe` — Servidor API REST compilado en Go con SQLite integrado.
+2. `recursos/padron.db` — Base de datos semilla inicial para equipos limpios.
+3. `electron/icon.ico` — Ícono oficial de PADRÓN aplicado al ejecutable, instalador y barra de tareas de Windows.
