@@ -14,18 +14,18 @@ El sistema opera bajo una arquitectura de **escritorio autónoma de tres capas**
 flowchart LR
     subgraph Electron["Contenedor Nativo Electron (Windows)"]
         direction TB
-        Main["Proceso Principal (main.cjs)\nGestión de ciclo de vida y puerto libre"]
-        Preload["Puente Seguro (preload.cjs)\nContextBridge window.padron"]
-        Renderer["Interfaz React 19 + TS + Tailwind\n(HashRouter + Modales + Vistas por Rol)"]
-        Backend["Servidor API Go + Gin\n(padron.exe en puerto local dinámico)"]
-        DB[("Base de Datos SQLite\n(padron.db con Triggers y FK)")]
+        Main["Proceso Principal (main.cjs)"]
+        Preload["Puente Seguro IPC (preload.cjs)"]
+        Renderer["Interfaz React 19 + TypeScript + Tailwind"]
+        Backend["Servidor API Go + Gin (padron.exe)"]
+        DB[("Base de Datos SQLite (padron.db)")]
 
-        Main -->|"1. Inicia proceso hijo (-puerto, -bd)"| Backend
-        Backend -->|"2. Lee/Escribe con WAL y Foreign Keys"| DB
-        Main -->|"3. Verifica GET /salud y abre ventana"| Renderer
-        Renderer <-->|"4. Obtiene URL dinámica vía IPC"| Preload
-        Preload <--> Main
-        Renderer <-->|"5. Peticiones REST JSON + Token Bearer"| Backend
+        Main -->|"1. Inicia proceso hijo"| Backend
+        Backend -->|"2. Lee y escribe con Foreign Keys"| DB
+        Main -->|"3. Verifica salud y abre ventana"| Renderer
+        Renderer -->|"4. Obtiene URL dinamica via IPC"| Preload
+        Preload --> Main
+        Renderer -->|"5. Peticiones REST JSON + Token Bearer"| Backend
     end
 ```
 
@@ -124,17 +124,17 @@ erDiagram
      - El suplente no puede tener otra ausencia aprobada o pendiente que se traslape en fechas.
      - La solicitud nace en estado `PENDIENTE_SUPLENTE` y **no puede ser aprobada** hasta que el suplente invoque `/cobertura/confirmar` con `aceptar: true`, momento en que pasa a `PENDIENTE_APROBACION`.
 3. **Topes Financieros de Préstamos:**
-   - **Monto máximo:** $\text{Monto} \le 2 \times \text{Sueldo Semanal}$.
-   - **Descuento semanal individual:** $\lceil \text{Monto} / \text{Semanas} \rceil \le 35\% \text{ del Sueldo Semanal}$.
+   - **Monto máximo:** `Monto <= 2 * Sueldo Semanal`.
+   - **Descuento semanal individual:** `ceil(Monto / Semanas) <= 35% del Sueldo Semanal`.
    - **Límite de endeudamiento acumulado al aprobar:** La suma de descuentos semanales de todos los préstamos en estado `APROBADO` con saldo pendiente más el nuevo préstamo no puede exceder el **40% del Sueldo Semanal**.
    - **Día de retención:** Solo se permite registrar descuentos nominales indicando una fecha `semana_inicio` que sea **Lunes** (`time.Monday`), impidiendo cobros duplicados en la misma semana.
 4. **Fórmula de Reparto Exacto de Propinas:**
    - Para una sucursal y fecha, se obtienen todos los turnos con `estado = 'TRABAJADO'` y `horas_trabajadas > 0`.
-   - Para cada participante $i$, se calcula su peso ponderado:
-     $$P_i = \text{horas\_trabajadas}_i \times \text{factor\_propina}_i$$
+   - Para cada participante se calcula su peso ponderado:
+     `Peso_i = horas_trabajadas_i * factor_propina_i`
    - La asignación base en centavos se calcula como:
-     $$M_i = \left\lfloor \text{Bolsa}_{\text{centavos}} \times \frac{P_i}{\sum P_j} \right\rfloor$$
-   - Los centavos residuales ($\text{Bolsa}_{\text{centavos}} - \sum M_i$) se suman al último participante para garantizar que el 100% de la bolsa se reparta sin perder ni inventar un solo centavo.
+     `Monto_i = floor(Bolsa_centavos * (Peso_i / Suma_Pesos))`
+   - Los centavos residuales (`Bolsa_centavos - Suma(Monto_i)`) se suman al último participante para garantizar que el 100% de la bolsa se reparta sin perder ni inventar un solo centavo.
 
 ---
 
@@ -144,12 +144,12 @@ A continuación se detalla el flujo operativo estándar desde que la empresa con
 
 ```mermaid
 flowchart TD
-    A["1. Configuración de Infraestructura (RH)\nAlta de Sucursales, Árbol de Puestos y Vacantes"] --> B["2. Incorporación de Personal (RH)\nAlta de Empleado asignando Vacante + Cuenta de Usuario"]
-    B --> C["3. Gestión de Expediente en Kardex (RH)\nConsulta de historial y ajustes salariales/puesto"]
-    C --> D["4. Operación Diaria y Turnos (Encargado / RH)\nProgramación de horarios y registro de asistencia"]
-    D --> E["5. Solicitudes y Permisos (Operativo -> Suplente -> Jefe)\nCobertura de estaciones críticas y autorización"]
-    D --> F["6. Préstamos y Propinas (Operativo / Gestión)\nReparto diario ponderado y retenciones los lunes"]
-    E --> G["7. Auditoría y Reportes Ejecutivos\nAusentismo, Rotación por Puesto y Corte de Nómina"]
+    A["1. Configuracion de Infraestructura (RH)"] --> B["2. Incorporacion de Personal y Asignacion de Vacante (RH)"]
+    B --> C["3. Gestion de Expediente en Kardex de Usuario (RH)"]
+    C --> D["4. Operacion Diaria y Registro de Turnos (Encargado / RH)"]
+    D --> E["5. Solicitudes de Permisos y Suplencias (Operativo / Suplente / Jefe)"]
+    D --> F["6. Prestamos y Reparto de Propinas (Operativo / Gestion)"]
+    E --> G["7. Auditoria, Bitacora Inmutable y Reportes Ejecutivos"]
     F --> G
 ```
 
@@ -194,18 +194,18 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    actor Op as Colaborador (Operativo)
-    participantSys as Sistema PADRÓN
-    actor Sup as Compañero Suplente
-    actor Jefe as Jefe Directo (Encargado)
+    actor Op as Colaborador Operativo
+    participant Sys as Sistema PADRON
+    actor Sup as Companero Suplente
+    actor Jefe as Jefe Directo Encargado
 
-    Op->>participantSys: 1. Solicita Permiso (Sábado/Domingo en Puesto Crítico)
-    participantSys-->>Op: Valida que Suplente sea activo, mismo puesto y sucursal
-    participantSys->>Sup: 2. Estado: PENDIENTE_SUPLENTE
-    Sup->>participantSys: 3. Confirma Cobertura (Aceptar = true)
-    participantSys->>Jefe: 4. Estado cambia a: PENDIENTE_APROBACION
-    Jefe->>participantSys: 5. Dictamina y Aprueba Solicitud
-    participantSys-->>Op: 6. Estado final: APROBADA + Registro en Histórico
+    Op->>Sys: 1. Solicita Permiso en Puesto Critico
+    Sys-->>Op: Valida que Suplente sea activo, mismo puesto y sucursal
+    Sys->>Sup: 2. Estado inicial PENDIENTE_SUPLENTE
+    Sup->>Sys: 3. Confirma Cobertura (Aceptar = true)
+    Sys->>Jefe: 4. Estado cambia a PENDIENTE_APROBACION
+    Jefe->>Sys: 5. Dictamina y Aprueba Solicitud
+    Sys-->>Op: 6. Estado final APROBADA + Registro en Historico
 ```
 
 1. **Solicitud (`OPERATIVO`):** El trabajador entra al módulo **Permisos**, abre el pop-up **Solicitar Permiso**, elige el tipo (`DESCANSO`, `VACACIONES`, etc.), las fechas y el motivo. Si su puesto es crítico y abarca fin de semana, selecciona a su compañero suplente.
@@ -216,7 +216,7 @@ sequenceDiagram
 
 ### Paso 5: Flujo de Préstamos y Retenciones Semanales en Nómina
 
-1. **Solicitud:** El empleado entra a **Préstamos -> Solicitar Préstamo**, ingresa el monto requerido y el plazo en semanas (1 a 52). La interfaz calcula en vivo el descuento semanal estimado y valida que no supere los topes (máximo 2 semanas de sueldo y abono $\le 35\%$).
+1. **Solicitud:** El empleado entra a **Préstamos -> Solicitar Préstamo**, ingresa el monto requerido y el plazo en semanas (1 a 52). La interfaz calcula en vivo el descuento semanal estimado y valida que no supere los topes (máximo 2 semanas de sueldo y abono menor o igual al 35%).
 2. **Aprobación:** El encargado o administrador revisa la solicitud pendiente y la aprueba. El sistema verifica que el endeudamiento total activo del trabajador no rebase el 40% de su sueldo semanal.
 3. **Descuento en Nómina (Cada Lunes):**
    - Cada inicio de semana de nómina, desde la tarjeta del préstamo aprobado se pulsa **Registrar Retención**.

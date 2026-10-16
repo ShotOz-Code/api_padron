@@ -15,6 +15,22 @@ Este documento describe la arquitectura, componentes, sistema de diseño, capa d
 | **Runtime de Escritorio** | Electron 44 (`main.cjs` + `preload.cjs`) | Contenedor nativo de escritorio que orquesta el proceso del backend en Go (`padron.exe`) y SQLite. |
 | **Empaquetador** | `electron-builder` 26 | Generación de ejecutable autónomo (`PADRON RH Portable.exe`) e instalador Windows NSIS (`PADRON RH Setup 1.0.0.exe`). |
 
+```mermaid
+flowchart TD
+    App["App.tsx (HashRouter + SidebarProvider)"] --> Login["Login.tsx (Ruta Publica /)"]
+    App --> Guard["RutaProtegida.tsx (Valida Token y Rol)"]
+    Guard --> Layout["Navbar.tsx + Sidebar.tsx (Menu Retractil por Rol)"]
+    Layout --> Dash["Dashboard.tsx"]
+    Layout --> RH["Empleados.tsx (Centro RH)"]
+    Layout --> Operacion["Permisos / Prestamos / Propinas / Incidencias / Solicitudes / Reportes"]
+    Layout --> Perf["Perfil.tsx y ModalUsuario.tsx"]
+    RH --> Tab1["Plantilla + ModalEmpleado.tsx"]
+    RH --> Tab2["KardexEmpleadoView.tsx"]
+    RH --> Tab3["ArbolJerarquicoPuestos.tsx"]
+    RH --> Tab4["GestionVacantes.tsx"]
+    RH --> Tab5["GestionSucursales.tsx"]
+```
+
 ---
 
 ## 2. Estructura de Directorios del Frontend
