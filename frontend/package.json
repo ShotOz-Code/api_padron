@@ -44,6 +44,9 @@
     "appId": "mx.padron.rh",
     "productName": "PADRON RH",
     "asar": true,
+    "directories": {
+      "output": "../instalador"
+    },
     "files": [
       "dist/**/*",
       "electron/**/*",

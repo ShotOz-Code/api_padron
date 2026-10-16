@@ -1,6 +1,6 @@
 # PADRÓN — Sistema Integral de Recursos Humanos y Operación
 
-Plataforma de escritorio y API REST en español desarrollada para **Carnitas y Carne Asada PADRÓN**. Administra la estructura organizacional, sucursales, árbol jerárquico de puestos, vacantes (plazas), plantilla de personal, Kardex de colaborador, estaciones críticas, turnos, permisos con suplencia, préstamos con retención nominal, propinas ponderadas, buzón interno, bitácora inmutable de incidencias y reportes ejecutivos.
+Plataforma de escritorio y API REST en español desarrollada para **Carnitas y Carne Asada PADRÓN**. Administra la estructura organizacional, sucursales, **organigrama interactivo de puestos y personal**, vacantes (plazas), plantilla de personal, Kardex de colaborador, estaciones críticas, turnos, permisos con suplencia, préstamos con retención nominal, propinas ponderadas, buzón interno, bitácora inmutable de incidencias y reportes ejecutivos.
 
 Construido con una arquitectura autónoma de **Go (Gin) + SQLite embebido + React 19 + TypeScript + Tailwind CSS + Electron**.
 
@@ -19,7 +19,7 @@ Construido con una arquitectura autónoma de **Go (Gin) + SQLite embebido + Reac
 
 ## Ejecución y Empaquetado (Aplicación Completa de Escritorio)
 
-El sistema cuenta con dos modalidades de distribución listas para ejecutarse en cualquier equipo Windows **sin necesidad de instalar Go, Node.js, SQLite ni servidores externos** (ubicadas en `frontend/dist/` tras empaquetar):
+El sistema cuenta con dos modalidades de distribución listas para ejecutarse en cualquier equipo Windows **sin necesidad de instalar Go, Node.js, SQLite ni servidores externos** (ubicadas en la carpeta [`instalador/`](instalador/) en la raíz del proyecto):
 
 1. **Ejecutable Portable (`PADRON RH Portable.exe`):**
    - Un único archivo `.exe` autónomo.
@@ -28,9 +28,9 @@ El sistema cuenta con dos modalidades de distribución listas para ejecutarse en
    - Asistente de instalación NSIS con accesos directos e ícono institucional de PADRÓN.
    - Almacena la base de datos en `%APPDATA%\PADRON RH\PADRON-datos\padron.db`, garantizando persistencia entre actualizaciones.
 
-### Credenciales Iniciales por Defecto
-- **Usuario:** `admin`
-- **Contraseña:** `Cambiar123!`
+### Credenciales Iniciales de Acceso
+- **Usuario:** `Admin`
+- **Contraseña:** `xp74Hg53`
 - **Rol:** `RH_ADMIN`
 
 ---

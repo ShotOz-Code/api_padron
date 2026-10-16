@@ -365,7 +365,7 @@ export default function Solicitudes() {
                 />
               </div>
 
-              <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 space-y-1">
+              <div className="p-3 rounded-xl bg-stone-50 border border-stone-200">
                 <label className="flex items-center gap-2 text-xs font-semibold text-stone-800 cursor-pointer">
                   <input
                     type="checkbox"
@@ -374,13 +374,8 @@ export default function Solicitudes() {
                     onChange={(e) => setAnonimo(e.target.checked)}
                     className="w-4 h-4 rounded border-stone-300 text-amber-600 accent-amber-600"
                   />
-                  Registrar como reporte 100% confidencial y anónimo
+                  Reporte confidencial y anónimo
                 </label>
-                {!tieneExpediente && (
-                  <p className="text-[10px] text-stone-500 pl-6">
-                    Las cuentas administrativas centrales sin expediente se registran de forma anónima automáticamente.
-                  </p>
-                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">

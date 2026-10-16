@@ -245,17 +245,17 @@ export default function KardexEmpleadoView({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
-        {/* BLOQUE 1: DATOS PROTEGIDOS (READ-ONLY) */}
+        {/* BLOQUE 1: DATOS DE REGISTRO (SOLO LECTURA) */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 p-2.5 bg-stone-100 rounded-xl text-stone-800 text-xs font-semibold">
             <IconLock size={15} className="text-amber-800 shrink-0" />
-            <span>Datos Protegidos (Solo Lectura — Políticas RH PADRÓN)</span>
+            <span>Datos de Identidad</span>
           </div>
 
           <div className="space-y-3 bg-stone-50/70 border border-stone-200/80 p-4 rounded-xl text-xs">
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
-                Nombre Completo (Bloqueado)
+                Nombre Completo
               </label>
               <input
                 type="text"
@@ -268,7 +268,7 @@ export default function KardexEmpleadoView({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
-                  CURP (Bloqueado)
+                  CURP
                 </label>
                 <input
                   type="text"
@@ -280,7 +280,7 @@ export default function KardexEmpleadoView({
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
-                  No. Nómina (Bloqueado)
+                  No. Nómina
                 </label>
                 <input
                   type="text"
@@ -294,7 +294,7 @@ export default function KardexEmpleadoView({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
-                  Fecha de Ingreso (Bloqueado)
+                  Fecha de Ingreso
                 </label>
                 <input
                   type="date"
@@ -306,7 +306,7 @@ export default function KardexEmpleadoView({
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-1">
-                  Usuario del Sistema (Bloqueado)
+                  Usuario del Sistema
                 </label>
                 <input
                   type="text"
@@ -316,10 +316,6 @@ export default function KardexEmpleadoView({
                 />
               </div>
             </div>
-
-            <p className="text-[11px] text-stone-500 italic pt-1">
-              * Por normas de auditoría, las identidades oficiales, nómina y usuarios de acceso se mantienen inmutables tras su registro inicial.
-            </p>
           </div>
         </div>
 

@@ -345,23 +345,20 @@ export default function ModalEmpleado({ isOpen, onClose, onEmpleadoCreado }: Mod
         </div>
 
         {vacantes.length > 0 && (
-          <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl space-y-1">
+          <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl">
             <Select
               label="Asignar Vacante Disponible (Opcional)"
               name="vacante_id"
               value={formData.vacante_id}
               onChange={handleChange}
             >
-              <option value={0}>Sin vacante asignada al ingreso (se configurará manualmente)</option>
+              <option value={0}>Sin vacante asignada</option>
               {vacantes.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.codigo} — {v.titulo} ({v.sucursal})
                 </option>
               ))}
             </Select>
-            <p className="text-[10px] text-stone-500">
-              Al seleccionar una vacante, se autocompletarán la sucursal, puesto y sueldo ofertado de la plaza.
-            </p>
           </div>
         )}
 

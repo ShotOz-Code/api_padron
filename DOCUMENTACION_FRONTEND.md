@@ -145,12 +145,13 @@ Organizado en **5 pestañas especializadas** para la administración del capital
      - Usuario de acceso (`nombre_usuario`)
    - **Campos modificables por RH:** Puesto, Sucursal, Vacante/Plaza asignada, Sueldo base semanal, Teléfono, Correo electrónico y Estatus (Activo / Baja lógica).
    - **Pestañas de historial del trabajador:** Bitácora de incidencias, historial de permisos/coberturas y estado de cuenta de préstamos.
-3. **Árbol Jerárquico de Puestos ([`ArbolJerarquicoPuestos.tsx`](src/components/ArbolJerarquicoPuestos.tsx)):**
-   - Construye dinámicamente el organigrama interactivo en pantalla a partir de la relación `jefe_puesto_id`.
-   - Es **100% interactivo en la interfaz** (no imprimible ni exportable): permite expandir/colapsar ramas, identificar niveles jerárquicos, visualizar qué puestos son críticos, cuántos empleados activos ocupan cada puesto, cuántas vacantes libres existen, y crear o editar puestos asignando su puesto jefe.
+3. **Organigrama por Vacante Ocupada ([`ArbolJerarquicoPuestos.tsx`](src/components/ArbolJerarquicoPuestos.tsx)):**
+   - Vista **100% informativa** (sólo lectura) que construye el organigrama exclusivamente a partir de las **vacantes ocupadas (`estado === 'CUBIERTA'`)** conectadas según la jerarquía del puesto asociado (`jefe_puesto_id`).
+   - Cada nodo presenta el código de vacante, título de la plaza, puesto, sucursal y el colaborador titular asignado con su número de nómina.
+   - Incluye filtro por sucursal y control de escala/zoom (`75%` a `115%`).
 4. **Vacantes y Plazas ([`GestionVacantes.tsx`](src/components/GestionVacantes.tsx)):**
    - Catálogo de plazas operativas con filtros por estado (`DISPONIBLE`, `CUBIERTA`, `PAUSADA`, `CANCELADA`), sucursal y puesto.
-   - Permite abrir nuevas vacantes con código único (ej. `VAC-008`), sueldo ofertado y requisitos; asignar una plaza disponible a un colaborador activo; o liberar una plaza ocupada.
+   - Permite dar de alta nuevos puestos (`Nuevo Puesto`) y abrir nuevas vacantes con código único (ej. `VAC-008`), sueldo ofertado y requisitos; asignar una plaza disponible a un colaborador activo; o liberar una plaza ocupada.
 5. **Sucursales ([`GestionSucursales.tsx`](src/components/GestionSucursales.tsx)):**
    - Alta y edición de sucursales específicas con nombre, dirección física, teléfono de contacto y activación/desactivación operativa.
 
@@ -244,6 +245,6 @@ Para generar el ejecutable portable y el instalador desde el código fuente:
 npm run package
 ```
 
-Esto produce en `frontend/dist/`:
+Esto produce en la carpeta `instalador/` (en la raíz del proyecto):
 - **`PADRON RH Portable.exe`**: Ejecutable único portable (sin instalación).
 - **`PADRON RH Setup 1.0.0.exe`**: Instalador asistido para Windows con selector de directorio y creación de accesos directos con el logotipo de PADRÓN.

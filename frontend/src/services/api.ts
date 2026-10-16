@@ -356,7 +356,7 @@ export function obtenerRol(): Rol | null {
 }
 
 export function obtenerNombreUsuario(): string {
-  return sessionStorage.getItem(USUARIO_KEY) || 'admin';
+  return sessionStorage.getItem(USUARIO_KEY) || 'Admin';
 }
 
 export function estaAutenticado(): boolean {

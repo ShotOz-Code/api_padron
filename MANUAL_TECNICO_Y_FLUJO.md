@@ -144,7 +144,7 @@ A continuación se detalla el flujo operativo estándar desde que la empresa con
 
 ```mermaid
 flowchart TD
-    A["1. Configuracion de Infraestructura (RH)"] --> B["2. Incorporacion de Personal y Asignacion de Vacante (RH)"]
+    A["1. Configuracion de Infraestructura y Organigrama (RH)"] --> B["2. Incorporacion de Personal y Asignacion de Vacante (RH)"]
     B --> C["3. Gestion de Expediente en Kardex de Usuario (RH)"]
     C --> D["4. Operacion Diaria y Registro de Turnos (Encargado / RH)"]
     D --> E["5. Solicitudes de Permisos y Suplencias (Operativo / Suplente / Jefe)"]
@@ -155,13 +155,13 @@ flowchart TD
 
 ---
 
-### Paso 1: Configuración de Sucursales, Puestos y Vacantes (`RH_ADMIN`)
+### Paso 1: Configuración de Sucursales, Organigrama y Vacantes (`RH_ADMIN`)
 
-1. **Iniciar sesión** con la cuenta administradora (`admin` / `Cambiar123!`).
+1. **Iniciar sesión** con la cuenta administradora inicial (**Usuario:** `Admin` / **Contraseña:** `xp74Hg53`).
 2. Ir al módulo **Recursos Humanos (`Empleados`)** en el menú lateral:
-   - **Pestaña "Sucursales":** Dar clic en **Nueva Sucursal** para registrar las unidades de negocio (ej. *Matriz PADRÓN*, *Sucursal Norte*) con dirección y teléfono.
-   - **Pestaña "Árbol Jerárquico de Puestos":** Visualizar la estructura organizacional interactiva. Para agregar un cargo, pulsar **Nuevo Puesto**, definir su nombre, indicar quién es su **Puesto Jefe Inmediato** (`jefe_puesto_id`), su factor de propinas (ej. `1.30` para Maestro Carnitero) y marcar si es **Estación Crítica con Suplente Obligatorio**.
-   - **Pestaña "Vacantes y Plazas":** Pulsar **Nueva Vacante** para abrir las plazas autorizadas en cada sucursal (ej. código `VAC-008`, título *Parrillero Matutino*, puesto *Parrillero*, sucursal *Matriz*, sueldo ofertado). La vacante queda en estado `DISPONIBLE`.
+   - **Pestaña "Sucursales":** Dar clic en **Dar de Alta Sucursal** para registrar las unidades de negocio (ej. *Matriz PADRÓN*, *Sucursal Norte*) con dirección y teléfono.
+   - **Pestaña "Vacantes y Plazas":** Permite crear puestos con **Nuevo Puesto** (definiendo a qué jefe inmediato reporta, su factor de propinas y si es puesto crítico) y pulsar **Dar de Alta Vacante** para abrir las plazas autorizadas en cada sucursal (ej. código `VAC-008`, título *Parrillero Matutino*, puesto *Parrillero*, sucursal *Matriz*, sueldo ofertado).
+   - **Pestaña "Organigrama":** Vista estrictamente informativa (sólo lectura) que muestra el organigrama construido a partir de las **vacantes ocupadas (`CUBIERTA`)**, detallando el código de plaza, puesto, sucursal y colaborador titular asignado.
 
 ---
 

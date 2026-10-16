@@ -253,16 +253,22 @@ func datosIniciales(db *sql.DB) error {
             ('VAC-006','Mesero de Salón y Terraza',4,1,'DISPONIBLE',250000,'Atención directa al cliente'),
             ('VAC-007','Auxiliar de Limpieza',6,1,'DISPONIBLE',220000,'Aseo e higiene operativa')`)
 	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM usuarios WHERE nombre_usuario='admin'`).Scan(&conteo); err != nil {
-		return err
-	}
-	if conteo == 0 {
-		hash, err := bcrypt.GenerateFromPassword([]byte("Cambiar123!"), bcrypt.DefaultCost)
+	var adminHash string
+	err := db.QueryRow(`SELECT contrasena_hash FROM usuarios WHERE nombre_usuario='Admin' COLLATE NOCASE`).Scan(&adminHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		hash, err := bcrypt.GenerateFromPassword([]byte("xp74Hg53"), bcrypt.DefaultCost)
 		if err != nil {
 			return err
 		}
-		_, err = db.Exec(`INSERT INTO usuarios(nombre_usuario,contrasena_hash,rol) VALUES ('admin',?,?)`, string(hash), rolRH)
+		_, err = db.Exec(`INSERT INTO usuarios(nombre_usuario,contrasena_hash,rol) VALUES ('Admin',?,?)`, string(hash), rolRH)
 		return err
+	} else if err != nil {
+		return err
+	} else if bcrypt.CompareHashAndPassword([]byte(adminHash), []byte("Cambiar123!")) == nil {
+		hash, err := bcrypt.GenerateFromPassword([]byte("xp74Hg53"), bcrypt.DefaultCost)
+		if err == nil {
+			_, _ = db.Exec(`UPDATE usuarios SET nombre_usuario='Admin', contrasena_hash=? WHERE nombre_usuario='Admin' COLLATE NOCASE`, string(hash))
+		}
 	}
 	return nil
 }

@@ -122,16 +122,10 @@ export default function Incidencias() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white border border-stone-200/90 rounded-2xl shadow-xs">
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2.5">
-                  <IconAlertTriangle size={20} className="text-amber-800" />
-                  <span>Bitácora de Incidencias</span>
-                </h1>
-                <Badge variant="default">Inmutable</Badge>
-              </div>
-              <p className="text-xs text-stone-500 font-medium mt-0.5">
-                Faltas, retardos, eventualidades de cocina y reconocimientos en turnos pico.
-              </p>
+              <h1 className="text-lg sm:text-xl font-bold text-stone-900 tracking-tight flex items-center gap-2.5">
+                <IconAlertTriangle size={20} className="text-amber-800" />
+                <span>Bitácora de Incidencias</span>
+              </h1>
             </div>
 
             <Button
@@ -225,7 +219,6 @@ export default function Incidencias() {
             isOpen={modalAbierto}
             onClose={() => setModalAbierto(false)}
             title="Registrar Incidencia"
-            description="La incidencia quedará grabada de forma inmutable con folio de bitácora."
           >
             {formError && (
               <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium mb-3">

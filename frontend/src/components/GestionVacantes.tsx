@@ -34,6 +34,18 @@ export default function GestionVacantes() {
   const [vacanteEditando, setVacanteEditando] = useState<Vacante | null>(null);
   const [guardando, setGuardando] = useState(false);
 
+  // Modal para dar de alta un nuevo puesto
+  const [modalPuestoAbierto, setModalPuestoAbierto] = useState(false);
+  const [guardandoPuesto, setGuardandoPuesto] = useState(false);
+  const [puestoForm, setPuestoForm] = useState({
+    nombre: '',
+    descripcion: '',
+    es_critico: false,
+    requiere_suplente: false,
+    factor_propina: 1.0,
+    jefe_puesto_id: 0,
+  });
+
   // Modal para asignar vacante a usuario
   const [modalAsignar, setModalAsignar] = useState<Vacante | null>(null);
   const [empleadoSeleccionadoId, setEmpleadoSeleccionadoId] = useState<number>(0);
@@ -167,6 +179,45 @@ export default function GestionVacantes() {
     }
   };
 
+  const handleCrearPuesto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMensaje(null);
+
+    const nom = puestoForm.nombre.trim();
+    if (!nom) {
+      setMensaje({ tipo: 'error', texto: 'El nombre del puesto es obligatorio.' });
+      return;
+    }
+
+    setGuardandoPuesto(true);
+    try {
+      await CatalogosService.crearPuesto({
+        nombre: nom,
+        descripcion: puestoForm.descripcion.trim(),
+        es_critico: puestoForm.es_critico,
+        requiere_suplente: puestoForm.requiere_suplente,
+        factor_propina: Number(puestoForm.factor_propina),
+        jefe_puesto_id:
+          Number(puestoForm.jefe_puesto_id) > 0 ? Number(puestoForm.jefe_puesto_id) : null,
+      } as any);
+      setMensaje({ tipo: 'ok', texto: 'Puesto creado correctamente.' });
+      setModalPuestoAbierto(false);
+      setPuestoForm({
+        nombre: '',
+        descripcion: '',
+        es_critico: false,
+        requiere_suplente: false,
+        factor_propina: 1.0,
+        jefe_puesto_id: 0,
+      });
+      cargarDatos();
+    } catch (err: any) {
+      setMensaje({ tipo: 'error', texto: err.message || 'Error al guardar puesto' });
+    } finally {
+      setGuardandoPuesto(false);
+    }
+  };
+
   const handleAsignar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalAsignar || !empleadoSeleccionadoId) return;
@@ -207,18 +258,23 @@ export default function GestionVacantes() {
       {/* Cabecera */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white border border-stone-200/90 rounded-2xl shadow-xs">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-stone-900 tracking-tight flex items-center gap-2">
-            <span>Gestión y Asignación de Vacantes</span>
+          <h2 className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
+            Gestión y Asignación de Vacantes
           </h2>
-          <p className="text-xs text-stone-500 font-medium mt-0.5">
-            Alta de plazas operativas, definición de sueldos y asignación directa a colaboradores de PADRÓN.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={cargarDatos}>
             <IconRefresh size={14} />
             <span>Refrescar</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setModalPuestoAbierto(true)}
+          >
+            <IconPlus size={14} />
+            <span>Nuevo Puesto</span>
           </Button>
           <Button variant="primary" size="sm" onClick={abrirCrear}>
             <IconPlus size={14} />
@@ -473,6 +529,116 @@ export default function GestionVacantes() {
                 </Button>
                 <Button type="submit" variant="primary" size="sm" disabled={guardando}>
                   {guardando ? 'Guardando...' : vacanteEditando ? 'Actualizar Vacante' : 'Crear Vacante'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear Puesto */}
+      {modalPuestoAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-xs">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-lg w-full shadow-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <h3 className="text-base font-bold text-stone-900">Dar de Alta Puesto</h3>
+              <button
+                type="button"
+                onClick={() => setModalPuestoAbierto(false)}
+                className="text-stone-400 hover:text-stone-700 cursor-pointer"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCrearPuesto} className="space-y-3.5 text-xs">
+              <Input
+                label="Nombre del Puesto *"
+                placeholder="Ej. Maestro Carnitero, Parrillero, Cajero..."
+                value={puestoForm.nombre}
+                onChange={(e) => setPuestoForm((prev) => ({ ...prev, nombre: e.target.value }))}
+                required
+              />
+
+              <Input
+                label="Descripción"
+                placeholder="Funciones principales..."
+                value={puestoForm.descripcion}
+                onChange={(e) => setPuestoForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="Jefe Inmediato"
+                  value={puestoForm.jefe_puesto_id}
+                  onChange={(e) =>
+                    setPuestoForm((prev) => ({ ...prev, jefe_puesto_id: Number(e.target.value) }))
+                  }
+                >
+                  <option value={0}>Mando de 1er Nivel</option>
+                  {puestos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </Select>
+
+                <Input
+                  label="Factor Propina"
+                  type="number"
+                  step="0.05"
+                  min="0.1"
+                  max="5.0"
+                  value={puestoForm.factor_propina}
+                  onChange={(e) =>
+                    setPuestoForm((prev) => ({
+                      ...prev,
+                      factor_propina: parseFloat(e.target.value) || 1,
+                    }))
+                  }
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-3 bg-stone-50 border border-stone-200 rounded-xl">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={puestoForm.es_critico}
+                    onChange={(e) =>
+                      setPuestoForm((prev) => ({
+                        ...prev,
+                        es_critico: e.target.checked,
+                        requiere_suplente: e.target.checked ? prev.requiere_suplente : false,
+                      }))
+                    }
+                    className="rounded text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className="font-semibold text-stone-800">Puesto Crítico</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={puestoForm.requiere_suplente}
+                    disabled={!puestoForm.es_critico}
+                    onChange={(e) =>
+                      setPuestoForm((prev) => ({ ...prev, requiere_suplente: e.target.checked }))
+                    }
+                    className="rounded text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className={`font-semibold ${puestoForm.es_critico ? 'text-stone-800' : 'text-stone-400'}`}>
+                    Exige Suplente
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">
+                <Button type="button" variant="outline" size="sm" onClick={() => setModalPuestoAbierto(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="primary" size="sm" disabled={guardandoPuesto}>
+                  {guardandoPuesto ? 'Guardando...' : 'Crear Puesto'}
                 </Button>
               </div>
             </form>

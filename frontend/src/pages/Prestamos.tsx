@@ -575,16 +575,12 @@ export default function Prestamos() {
 
             <form onSubmit={handleRegistrarRetencion} className="space-y-4">
               <Input
-                label="Semana Inicio (Debe ser día Lunes) *"
+                label="Semana Inicio (Lunes) *"
                 type="date"
                 value={semanaInicioRetencion}
                 onChange={(e) => setSemanaInicioRetencion(e.target.value)}
                 required
               />
-
-              <p className="text-[11px] text-stone-500">
-                La fecha seleccionada se validará como día lunes según las reglas contables de nómina de PADRÓN.
-              </p>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">
                 <Button type="button" variant="outline" size="sm" onClick={() => setModalRetencion(null)}>

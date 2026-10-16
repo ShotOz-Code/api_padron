@@ -64,7 +64,7 @@ func TestFlujoPermisoCriticoConSuplente(t *testing.T) {
 	if res := llamada(t, r, http.MethodGet, "/salud", "", ""); res.Code != http.StatusOK {
 		t.Fatalf("salud: %d", res.Code)
 	}
-	admin := tokenDe(t, r, "admin", "Cambiar123!")
+	admin := tokenDe(t, r, "Admin", "xp74Hg53")
 	primerEmpleado := `{"numero_empleado":"EMP-001","nombres":"Ana","apellido_paterno":"Cocina","fecha_ingreso":"2026-10-01","sueldo_semanal_centavos":100000,"sucursal_id":1,"puesto_id":2,"usuario":"ana","contrasena":"Secreta123!"}`
 	segundoEmpleado := `{"numero_empleado":"EMP-002","nombres":"Beto","apellido_paterno":"Cocina","fecha_ingreso":"2026-10-01","sueldo_semanal_centavos":100000,"sucursal_id":1,"puesto_id":2,"usuario":"beto","contrasena":"Secreta123!"}`
 	for _, cuerpo := range []string{primerEmpleado, segundoEmpleado} {
@@ -116,7 +116,7 @@ func TestRequiereAutenticacion(t *testing.T) {
 func TestKardexYVacantes(t *testing.T) {
 	a := nuevaAPIPrueba(t)
 	r := a.enrutador()
-	admin := tokenDe(t, r, "admin", "Cambiar123!")
+	admin := tokenDe(t, r, "Admin", "xp74Hg53")
 
 	// 1. Listar vacantes iniciales
 	res := llamada(t, r, http.MethodGet, "/api/v1/vacantes", admin, "")

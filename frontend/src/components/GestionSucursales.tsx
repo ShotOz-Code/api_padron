@@ -110,9 +110,6 @@ export default function GestionSucursales() {
           <h2 className="text-base sm:text-lg font-bold text-stone-900 tracking-tight flex items-center gap-2">
             <span>Catálogo y Alta de Sucursales</span>
           </h2>
-          <p className="text-xs text-stone-500 font-medium mt-0.5">
-            Registro oficial de ubicaciones operativas, cocinas centrales y puntos de venta de Cárnitas y Asada PADRÓN.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">

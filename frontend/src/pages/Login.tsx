@@ -5,8 +5,8 @@ import { Button, Input } from '../components/ui';
 import { LOGO_IMG } from '../assets/logo';
 
 export default function Login() {
-  const [usuario, setUsuario] = useState('admin');
-  const [contrasena, setContrasena] = useState('Cambiar123!');
+  const [usuario, setUsuario] = useState('Admin');
+  const [contrasena, setContrasena] = useState('xp74Hg53');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -85,7 +85,7 @@ export default function Login() {
             value={usuario}
             onChange={(e) => setUsuario(e.target.value)}
             required
-            placeholder="admin"
+            placeholder="Admin"
           />
 
           <Input

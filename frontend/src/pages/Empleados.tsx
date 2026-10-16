@@ -128,7 +128,7 @@ export default function Empleados() {
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
               }`}
             >
-              Árbol Jerárquico de Puestos
+              Organigrama
             </button>
             <button
               type="button"
