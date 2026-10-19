@@ -1,0 +1,25 @@
+{
+  "name": "humanpadron",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PADRÓN — Sistema de Recursos Humanos y Operación",
+  "scripts": {
+    "start": "npm --prefix frontend run start:electron",
+    "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev:vite",
+    "electron": "npm --prefix frontend run start:electron",
+    "build:backend": "go build -trimpath -ldflags=\"-s -w\" -o ./entregable/padron.exe .",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "package": "npm run build:backend && npm --prefix frontend run build:electron",
+    "test": "go test ./..."
+  },
+  "dependencies": {
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

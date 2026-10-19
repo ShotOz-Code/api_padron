@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "anthropic-frontend-design": {
+      "version": "1.0.2",
+      "installedAt": "2026-10-12T21:29:39.410Z",
+      "platform": "gemini"
+    },
+    "alirezarezvani-ui-design-system": {
+      "version": "1.0.1",
+      "installedAt": "2026-10-12T21:29:52.745Z",
+      "platform": "gemini"
+    }
+  }
+}
