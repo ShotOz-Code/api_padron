@@ -65,6 +65,15 @@ func TestFlujoPermisoCriticoConSuplente(t *testing.T) {
 		t.Fatalf("salud: %d", res.Code)
 	}
 	admin := tokenDe(t, r, "Admin", "xp74Hg53")
+	if res := llamada(t, r, http.MethodPost, "/api/v1/sucursales", admin, `{"nombre":"Sucursal Prueba","direccion":"Av. Principal 100","telefono":"4420000000"}`); res.Code != http.StatusCreated {
+		t.Fatalf("crear sucursal: %d %s", res.Code, res.Body.String())
+	}
+	if res := llamada(t, r, http.MethodPost, "/api/v1/puestos", admin, `{"nombre":"Maestro Carnitero","descripcion":"Cazo","es_critico":true,"requiere_suplente":true,"factor_propina":1.3}`); res.Code != http.StatusCreated {
+		t.Fatalf("crear puesto 1: %d %s", res.Code, res.Body.String())
+	}
+	if res := llamada(t, r, http.MethodPost, "/api/v1/puestos", admin, `{"nombre":"Parrillero","descripcion":"Asador","es_critico":true,"requiere_suplente":true,"factor_propina":1.25,"jefe_puesto_id":1}`); res.Code != http.StatusCreated {
+		t.Fatalf("crear puesto 2: %d %s", res.Code, res.Body.String())
+	}
 	primerEmpleado := `{"numero_empleado":"EMP-001","nombres":"Ana","apellido_paterno":"Cocina","fecha_ingreso":"2026-10-01","sueldo_semanal_centavos":100000,"sucursal_id":1,"puesto_id":2,"usuario":"ana","contrasena":"Secreta123!"}`
 	segundoEmpleado := `{"numero_empleado":"EMP-002","nombres":"Beto","apellido_paterno":"Cocina","fecha_ingreso":"2026-10-01","sueldo_semanal_centavos":100000,"sucursal_id":1,"puesto_id":2,"usuario":"beto","contrasena":"Secreta123!"}`
 	for _, cuerpo := range []string{primerEmpleado, segundoEmpleado} {
@@ -118,6 +127,16 @@ func TestKardexYVacantes(t *testing.T) {
 	r := a.enrutador()
 	admin := tokenDe(t, r, "Admin", "xp74Hg53")
 
+	if res := llamada(t, r, http.MethodPost, "/api/v1/sucursales", admin, `{"nombre":"Sucursal Prueba","direccion":"Av. Principal 100","telefono":"4420000000"}`); res.Code != http.StatusCreated {
+		t.Fatalf("crear sucursal: %d %s", res.Code, res.Body.String())
+	}
+	if res := llamada(t, r, http.MethodPost, "/api/v1/puestos", admin, `{"nombre":"Maestro Carnitero","descripcion":"Cazo","es_critico":true,"requiere_suplente":true,"factor_propina":1.3}`); res.Code != http.StatusCreated {
+		t.Fatalf("crear puesto 1: %d %s", res.Code, res.Body.String())
+	}
+	if res := llamada(t, r, http.MethodPost, "/api/v1/puestos", admin, `{"nombre":"Parrillero","descripcion":"Asador","es_critico":true,"requiere_suplente":true,"factor_propina":1.25,"jefe_puesto_id":1}`); res.Code != http.StatusCreated {
+		t.Fatalf("crear puesto 2: %d %s", res.Code, res.Body.String())
+	}
+
 	// 1. Listar vacantes iniciales
 	res := llamada(t, r, http.MethodGet, "/api/v1/vacantes", admin, "")
 	if res.Code != http.StatusOK {
@@ -170,7 +189,7 @@ func TestKardexYVacantes(t *testing.T) {
 	if kardexResp.Empleado.NumeroEmpleado != "EMP-100" {
 		t.Fatalf("empleado incorrecto en kardex: %s", kardexResp.Empleado.NumeroEmpleado)
 	}
-	if kardexResp.Empleado.VacanteCodigo != "VAC-001" {
+	if kardexResp.Empleado.VacanteCodigo != "VAC-TEST01" {
 		t.Fatalf("vacante no asignada correctamente: %s", kardexResp.Empleado.VacanteCodigo)
 	}
 }

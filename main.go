@@ -1,4 +1,4 @@
-// API de Gestión y Control Operativo para Cárnitas y Carne Asada PADRÓN.
+﻿// API de GestiÃ³n y Control Operativo para CÃ¡rnitas y Carne Asada PADRÃ“N.
 // El ejecutable usa SQLite embebido: no necesita un servidor de base de datos.
 package main
 
@@ -92,7 +92,7 @@ func main() {
 	}
 	a := &aplicacion{db: db, secreto: secreto}
 	r := a.enrutador()
-	log.Printf("PADRÓN API escuchando en http://localhost:%d | Base de datos: %s", puerto, rutaBD)
+	log.Printf("PADRÃ“N API escuchando en http://localhost:%d | Base de datos: %s", puerto, rutaBD)
 	log.Fatal(r.Run(fmt.Sprintf(":%d", puerto)))
 }
 
@@ -189,8 +189,8 @@ func migrar(db *sql.DB) error {
             id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER REFERENCES usuarios(id), accion TEXT NOT NULL,
             entidad TEXT NOT NULL, entidad_id INTEGER, detalle TEXT, creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`,
-		`CREATE TRIGGER IF NOT EXISTS impedir_actualizar_historico BEFORE UPDATE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histórico de incidencias es inmutable'); END`,
-		`CREATE TRIGGER IF NOT EXISTS impedir_borrar_historico BEFORE DELETE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histórico de incidencias es inmutable'); END`,
+		`CREATE TRIGGER IF NOT EXISTS impedir_actualizar_historico BEFORE UPDATE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histÃ³rico de incidencias es inmutable'); END`,
+		`CREATE TRIGGER IF NOT EXISTS impedir_borrar_historico BEFORE DELETE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histÃ³rico de incidencias es inmutable'); END`,
 	}
 	for _, consulta := range esquema {
 		if _, err := db.Exec(consulta); err != nil {
@@ -216,43 +216,6 @@ func migrar(db *sql.DB) error {
 }
 
 func datosIniciales(db *sql.DB) error {
-	var conteo int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sucursales`).Scan(&conteo); err != nil {
-		return err
-	}
-	if conteo == 0 {
-		if _, err := db.Exec(`INSERT INTO sucursales(nombre,direccion,telefono) VALUES ('Matriz PADRÓN','Pendiente de configurar','')`); err != nil {
-			return err
-		}
-	}
-	if err := db.QueryRow(`SELECT COUNT(*) FROM puestos`).Scan(&conteo); err != nil {
-		return err
-	}
-	if conteo == 0 {
-		_, err := db.Exec(`INSERT INTO puestos(nombre,descripcion,es_critico,requiere_suplente,factor_propina) VALUES
-            ('Maestro Carnitero','Responsable de carnitas y cazo',1,1,1.30),
-            ('Parrillero','Responsable de asador',1,1,1.25),
-            ('Tablajero','Preparación y corte',1,1,1.15),
-            ('Mesero','Servicio al cliente',0,0,1.00),
-            ('Cajero','Cobro y caja',1,1,1.00),
-            ('Limpieza','Limpieza y apoyo operativo',0,0,0.80)`)
-		if err != nil {
-			return err
-		}
-		_, _ = db.Exec(`UPDATE puestos SET jefe_puesto_id=(SELECT id FROM puestos WHERE nombre='Maestro Carnitero') WHERE nombre IN ('Parrillero','Tablajero')`)
-		_, _ = db.Exec(`UPDATE puestos SET jefe_puesto_id=(SELECT id FROM puestos WHERE nombre='Cajero') WHERE nombre IN ('Mesero','Limpieza')`)
-	}
-	var conteoVacantes int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM vacantes`).Scan(&conteoVacantes); err == nil && conteoVacantes == 0 {
-		_, _ = db.Exec(`INSERT INTO vacantes(codigo,titulo,puesto_id,sucursal_id,estado,sueldo_ofertado_centavos,requisitos) VALUES
-            ('VAC-001','Maestro Carnitero Titular',1,1,'DISPONIBLE',450000,'Responsable de cazo y cocción lenta'),
-            ('VAC-002','Parrillero de Turno Matutino',2,1,'DISPONIBLE',350000,'Especialista en asador y brasas'),
-            ('VAC-003','Parrillero de Turno Vespertino',2,1,'DISPONIBLE',350000,'Especialista en asador y brasas'),
-            ('VAC-004','Tablajero de Preparación',3,1,'DISPONIBLE',320000,'Cortes y preparación de piezas'),
-            ('VAC-005','Cajero de Operación',5,1,'DISPONIBLE',300000,'Cobro, caja y arqueos'),
-            ('VAC-006','Mesero de Salón y Terraza',4,1,'DISPONIBLE',250000,'Atención directa al cliente'),
-            ('VAC-007','Auxiliar de Limpieza',6,1,'DISPONIBLE',220000,'Aseo e higiene operativa')`)
-	}
 	var adminHash string
 	err := db.QueryRow(`SELECT contrasena_hash FROM usuarios WHERE nombre_usuario='Admin' COLLATE NOCASE`).Scan(&adminHash)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -294,7 +257,7 @@ func (a *aplicacion) enrutador() *gin.Engine {
 	r := gin.New()
 	r.Use(corsMiddleware(), gin.Logger(), gin.Recovery(), limiteCuerpo())
 	r.GET("/salud", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"estado": "activo", "servicio": "PADRÓN RH API", "hora": time.Now().Format(time.RFC3339)})
+		c.JSON(http.StatusOK, gin.H{"estado": "activo", "servicio": "PADRÃ“N RH API", "hora": time.Now().Format(time.RFC3339)})
 	})
 	r.POST("/api/v1/autenticacion/iniciar-sesion", a.iniciarSesion)
 
@@ -368,16 +331,16 @@ func responderError(c *gin.Context, estado int, mensaje string) {
 }
 func responderBD(c *gin.Context, err error) {
 	log.Printf("Error SQL: %v", err)
-	responderError(c, http.StatusInternalServerError, "Ocurrió un error al procesar los datos")
+	responderError(c, http.StatusInternalServerError, "OcurriÃ³ un error al procesar los datos")
 }
 
 func leerJSON(c *gin.Context, destino any) bool {
 	if err := c.ShouldBindJSON(destino); err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) || errors.Is(err, io.ErrUnexpectedEOF) {
-			responderError(c, http.StatusBadRequest, "El JSON no tiene un formato válido")
+			responderError(c, http.StatusBadRequest, "El JSON no tiene un formato vÃ¡lido")
 		} else {
-			responderError(c, http.StatusBadRequest, "Datos inválidos: "+err.Error())
+			responderError(c, http.StatusBadRequest, "Datos invÃ¡lidos: "+err.Error())
 		}
 		return false
 	}
@@ -443,7 +406,7 @@ func (a *aplicacion) iniciarSesion(c *gin.Context) {
 	var activo int
 	err := a.db.QueryRow(`SELECT id,empleado_id,contrasena_hash,rol,activo FROM usuarios WHERE nombre_usuario=? COLLATE NOCASE`, strings.TrimSpace(entrada.Usuario)).Scan(&id, &empleado, &hash, &rol, &activo)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && (activo == 0 || bcrypt.CompareHashAndPassword([]byte(hash), []byte(entrada.Contrasena)) != nil)) {
-		responderError(c, http.StatusUnauthorized, "Usuario o contraseña incorrectos")
+		responderError(c, http.StatusUnauthorized, "Usuario o contraseÃ±a incorrectos")
 		return
 	}
 	if err != nil {
@@ -467,7 +430,7 @@ func (a *aplicacion) crearToken(id int64, rol string) (string, error) {
 func (a *aplicacion) validarToken(token string) (int64, string, error) {
 	partes := strings.Split(token, ".")
 	if len(partes) != 2 {
-		return 0, "", errors.New("token inválido")
+		return 0, "", errors.New("token invÃ¡lido")
 	}
 	carga, err := base64.RawURLEncoding.DecodeString(partes[0])
 	if err != nil {
@@ -480,15 +443,15 @@ func (a *aplicacion) validarToken(token string) (int64, string, error) {
 	esperada := hmac.New(sha256.New, a.secreto)
 	_, _ = esperada.Write(carga)
 	if !hmac.Equal(firma, esperada.Sum(nil)) {
-		return 0, "", errors.New("firma inválida")
+		return 0, "", errors.New("firma invÃ¡lida")
 	}
 	partesCarga := strings.Split(string(carga), "|")
 	if len(partesCarga) != 3 {
-		return 0, "", errors.New("carga inválida")
+		return 0, "", errors.New("carga invÃ¡lida")
 	}
 	id, err := strconv.ParseInt(partesCarga[0], 10, 64)
 	if err != nil || id <= 0 {
-		return 0, "", errors.New("id inválido")
+		return 0, "", errors.New("id invÃ¡lido")
 	}
 	expira, err := strconv.ParseInt(partesCarga[2], 10, 64)
 	if err != nil || time.Now().Unix() > expira {
@@ -507,7 +470,7 @@ func (a *aplicacion) autenticar() gin.HandlerFunc {
 		}
 		id, _, err := a.validarToken(partes[1])
 		if err != nil {
-			responderError(c, http.StatusUnauthorized, "Token inválido o vencido")
+			responderError(c, http.StatusUnauthorized, "Token invÃ¡lido o vencido")
 			c.Abort()
 			return
 		}
@@ -515,7 +478,7 @@ func (a *aplicacion) autenticar() gin.HandlerFunc {
 		var activo int
 		err = a.db.QueryRow(`SELECT id,empleado_id,rol,activo FROM usuarios WHERE id=?`, id).Scan(&identidadActual.UsuarioID, &identidadActual.EmpleadoID, &identidadActual.Rol, &activo)
 		if err != nil || activo == 0 {
-			responderError(c, http.StatusUnauthorized, "La sesión ya no está activa")
+			responderError(c, http.StatusUnauthorized, "La sesiÃ³n ya no estÃ¡ activa")
 			c.Abort()
 			return
 		}
@@ -532,7 +495,7 @@ func requerirRoles(roles ...string) gin.HandlerFunc {
 				return
 			}
 		}
-		responderError(c, http.StatusForbidden, "No tiene permiso para esta operación")
+		responderError(c, http.StatusForbidden, "No tiene permiso para esta operaciÃ³n")
 		c.Abort()
 	}
 }
@@ -604,7 +567,7 @@ func (a *aplicacion) cambiarContrasena(c *gin.Context) {
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(entrada.ContrasenaActual)) != nil {
-		responderError(c, http.StatusUnauthorized, "La contraseña actual no es correcta")
+		responderError(c, http.StatusUnauthorized, "La contraseÃ±a actual no es correcta")
 		return
 	}
 	nuevoHash, err := bcrypt.GenerateFromPassword([]byte(entrada.ContrasenaNueva), bcrypt.DefaultCost)
@@ -617,7 +580,7 @@ func (a *aplicacion) cambiarContrasena(c *gin.Context) {
 		return
 	}
 	a.registrarAuditoria(i.UsuarioID, "CAMBIAR_CONTRASENA", "USUARIO", i.UsuarioID, "Cambio propio")
-	c.JSON(http.StatusOK, gin.H{"mensaje": "Contraseña actualizada correctamente"})
+	c.JSON(http.StatusOK, gin.H{"mensaje": "ContraseÃ±a actualizada correctamente"})
 }
 
 const consultaEmpleado = `SELECT e.id,e.numero_empleado,e.nombres,e.apellido_paterno,COALESCE(e.apellido_materno,''),COALESCE(e.curp,''),COALESCE(e.correo,''),COALESCE(e.telefono,''),e.fecha_ingreso,e.sueldo_semanal_centavos,e.sucursal_id,s.nombre,e.puesto_id,p.nombre,e.activo,COALESCE(jp.nombre,''),COALESCE(u.nombre_usuario,''),COALESCE(e.vacante_id,0),COALESCE(v.codigo,''),COALESCE(v.titulo,'') FROM empleados e JOIN sucursales s ON s.id=e.sucursal_id JOIN puestos p ON p.id=e.puesto_id LEFT JOIN puestos jp ON jp.id=p.jefe_puesto_id LEFT JOIN usuarios u ON u.empleado_id=e.id LEFT JOIN vacantes v ON v.id=e.vacante_id`
@@ -724,7 +687,7 @@ func (a *aplicacion) crearSucursal(c *gin.Context) {
 		responderError(c, 400, err.Error())
 		return
 	}
-	direccion, err := textoRequerido(e.Direccion, 250, "dirección")
+	direccion, err := textoRequerido(e.Direccion, 250, "direcciÃ³n")
 	if err != nil {
 		responderError(c, 400, err.Error())
 		return
@@ -775,7 +738,7 @@ func (a *aplicacion) actualizarSucursal(c *gin.Context) {
 		}
 	}
 	if e.Direccion != nil {
-		direccion, err = textoRequerido(*e.Direccion, 250, "dirección")
+		direccion, err = textoRequerido(*e.Direccion, 250, "direcciÃ³n")
 		if err != nil {
 			responderError(c, 400, err.Error())
 			return
@@ -792,7 +755,7 @@ func (a *aplicacion) actualizarSucursal(c *gin.Context) {
 		}
 	}
 	if _, err = a.db.Exec(`UPDATE sucursales SET nombre=?,direccion=?,telefono=?,activo=? WHERE id=?`, nombre, direccion, telefono, activo, id); err != nil {
-		responderError(c, 409, "No se pudo actualizar: el nombre ya está en uso")
+		responderError(c, 409, "No se pudo actualizar: el nombre ya estÃ¡ en uso")
 		return
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ACTUALIZAR", "SUCURSAL", id, nombre)
@@ -817,7 +780,7 @@ func (a *aplicacion) crearPuesto(c *gin.Context) {
 		return
 	}
 	if e.RequiereSuplente && !e.EsCritico {
-		responderError(c, 400, "Un puesto que requiere suplente debe ser crítico")
+		responderError(c, 400, "Un puesto que requiere suplente debe ser crÃ­tico")
 		return
 	}
 	if e.FactorPropina <= 0 || e.FactorPropina > 5 {
@@ -893,7 +856,7 @@ func (a *aplicacion) actualizarPuesto(c *gin.Context) {
 		}
 	}
 	if suplente == 1 && critico == 0 {
-		responderError(c, 400, "Un puesto que requiere suplente debe ser crítico")
+		responderError(c, 400, "Un puesto que requiere suplente debe ser crÃ­tico")
 		return
 	}
 	if factor <= 0 || factor > 5 {
@@ -965,7 +928,7 @@ func (a *aplicacion) crearUsuario(c *gin.Context) {
 	}
 	entrada.Rol = normalizarMayusculas(entrada.Rol)
 	if !rolValido(entrada.Rol) {
-		responderError(c, http.StatusBadRequest, "rol inválido")
+		responderError(c, http.StatusBadRequest, "rol invÃ¡lido")
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(entrada.Contrasena), bcrypt.DefaultCost)
@@ -975,7 +938,7 @@ func (a *aplicacion) crearUsuario(c *gin.Context) {
 	}
 	r, err := a.db.Exec(`INSERT INTO usuarios(empleado_id,nombre_usuario,contrasena_hash,rol) VALUES (?,?,?,?)`, entrada.EmpleadoID, usuario, hash, entrada.Rol)
 	if err != nil {
-		responderError(c, http.StatusConflict, "El empleado ya tiene usuario o el nombre de usuario está en uso")
+		responderError(c, http.StatusConflict, "El empleado ya tiene usuario o el nombre de usuario estÃ¡ en uso")
 		return
 	}
 	id, _ := r.LastInsertId()
@@ -1030,7 +993,7 @@ func (a *aplicacion) actualizarUsuario(c *gin.Context) {
 	if entrada.Rol != nil {
 		rolNuevo = normalizarMayusculas(*entrada.Rol)
 		if !rolValido(rolNuevo) {
-			responderError(c, http.StatusBadRequest, "rol inválido")
+			responderError(c, http.StatusBadRequest, "rol invÃ¡lido")
 			return
 		}
 	}
@@ -1082,7 +1045,7 @@ func validarEntradaEmpleado(e *entradaEmpleado) error {
 	}
 	for _, r := range e.NumeroEmpleado {
 		if !(r >= 'A' && r <= 'Z') && !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '-' && r != '_' {
-			return errors.New("numero_empleado solo admite letras, números, guion y guion bajo")
+			return errors.New("numero_empleado solo admite letras, nÃºmeros, guion y guion bajo")
 		}
 	}
 	if e.Nombres, err = textoRequerido(e.Nombres, 80, "nombres"); err != nil {
@@ -1096,10 +1059,10 @@ func validarEntradaEmpleado(e *entradaEmpleado) error {
 	e.Correo = strings.ToLower(strings.TrimSpace(e.Correo))
 	e.Telefono = strings.TrimSpace(e.Telefono)
 	if !esCURPValida(e.CURP) {
-		return errors.New("CURP debe tener 18 caracteres alfanuméricos en mayúscula")
+		return errors.New("CURP debe tener 18 caracteres alfanumÃ©ricos en mayÃºscula")
 	}
 	if !esCorreoValido(e.Correo) {
-		return errors.New("correo no tiene un formato válido")
+		return errors.New("correo no tiene un formato vÃ¡lido")
 	}
 	if len(e.Telefono) > 25 {
 		return errors.New("telefono no puede exceder 25 caracteres")
@@ -1131,7 +1094,7 @@ func validarEntradaEmpleado(e *entradaEmpleado) error {
 			e.Rol = rolOperativo
 		}
 		if e.Rol != rolOperativo && e.Rol != rolEncargado && e.Rol != rolRH {
-			return errors.New("rol inválido")
+			return errors.New("rol invÃ¡lido")
 		}
 	}
 	return nil
@@ -1143,14 +1106,14 @@ func (a *aplicacion) validarSucursalYPuesto(sucursalID, puestoID int64) error {
 	} else if err != nil {
 		return err
 	} else if activo == 0 {
-		return errors.New("La sucursal está inactiva")
+		return errors.New("La sucursal estÃ¡ inactiva")
 	}
 	if err := a.db.QueryRow(`SELECT activo FROM puestos WHERE id=?`, puestoID).Scan(&activo); errors.Is(err, sql.ErrNoRows) {
 		return errors.New("puesto_id no existe")
 	} else if err != nil {
 		return err
 	} else if activo == 0 {
-		return errors.New("El puesto está inactivo")
+		return errors.New("El puesto estÃ¡ inactivo")
 	}
 	return nil
 }
@@ -1179,7 +1142,7 @@ func (a *aplicacion) crearEmpleado(c *gin.Context) {
 	}
 	r, err := tx.Exec(`INSERT INTO empleados(numero_empleado,nombres,apellido_paterno,apellido_materno,curp,correo,telefono,fecha_ingreso,sueldo_semanal_centavos,sucursal_id,puesto_id,vacante_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, e.NumeroEmpleado, e.Nombres, e.ApellidoPaterno, nuloTexto(e.ApellidoMaterno), nuloTexto(e.CURP), nuloTexto(e.Correo), nuloTexto(e.Telefono), e.FechaIngreso, e.SueldoSemanalCentavos, e.SucursalID, e.PuestoID, vacanteID)
 	if err != nil {
-		responderError(c, 409, "No se pudo crear: número, CURP o correo ya existen")
+		responderError(c, 409, "No se pudo crear: nÃºmero, CURP o correo ya existen")
 		return
 	}
 	id, _ := r.LastInsertId()
@@ -1195,7 +1158,7 @@ func (a *aplicacion) crearEmpleado(c *gin.Context) {
 		}
 		ur, err := tx.Exec(`INSERT INTO usuarios(empleado_id,nombre_usuario,contrasena_hash,rol) VALUES (?,?,?,?)`, id, strings.TrimSpace(e.Usuario), hash, e.Rol)
 		if err != nil {
-			responderError(c, 409, "El nombre de usuario ya está en uso")
+			responderError(c, 409, "El nombre de usuario ya estÃ¡ en uso")
 			return
 		}
 		usuarioID, _ = ur.LastInsertId()
@@ -1332,7 +1295,7 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 	if entrada.Correo != nil {
 		correo = strings.ToLower(strings.TrimSpace(*entrada.Correo))
 		if !esCorreoValido(correo) {
-			responderError(c, 400, "correo no tiene un formato válido")
+			responderError(c, 400, "correo no tiene un formato vÃ¡lido")
 			return
 		}
 	}
@@ -1586,12 +1549,12 @@ func (a *aplicacion) crearVacante(c *gin.Context) {
 	if !leerJSON(c, &e) {
 		return
 	}
-	codigo, err := textoRequerido(e.Codigo, 30, "código")
+	codigo, err := textoRequerido(e.Codigo, 30, "cÃ³digo")
 	if err != nil {
 		responderError(c, 400, err.Error())
 		return
 	}
-	titulo, err := textoRequerido(e.Titulo, 150, "título")
+	titulo, err := textoRequerido(e.Titulo, 150, "tÃ­tulo")
 	if err != nil {
 		responderError(c, 400, err.Error())
 		return
@@ -1602,7 +1565,7 @@ func (a *aplicacion) crearVacante(c *gin.Context) {
 	}
 	r, err := a.db.Exec(`INSERT INTO vacantes(codigo, titulo, puesto_id, sucursal_id, estado, sueldo_ofertado_centavos, requisitos) VALUES (?,?,?,?,'DISPONIBLE',?,?)`, codigo, titulo, e.PuestoID, e.SucursalID, e.SueldoOfertadoCentavos, strings.TrimSpace(e.Requisitos))
 	if err != nil {
-		responderError(c, 409, "Ya existe una vacante con ese código")
+		responderError(c, 409, "Ya existe una vacante con ese cÃ³digo")
 		return
 	}
 	id, _ := r.LastInsertId()
@@ -1639,7 +1602,7 @@ func (a *aplicacion) actualizarVacante(c *gin.Context) {
 		return
 	}
 	if e.Titulo != nil {
-		titulo, err = textoRequerido(*e.Titulo, 150, "título")
+		titulo, err = textoRequerido(*e.Titulo, 150, "tÃ­tulo")
 		if err != nil {
 			responderError(c, 400, err.Error())
 			return
@@ -1660,7 +1623,7 @@ func (a *aplicacion) actualizarVacante(c *gin.Context) {
 	if e.Estado != nil {
 		nuevoEstado := normalizarMayusculas(*e.Estado)
 		if nuevoEstado != "DISPONIBLE" && nuevoEstado != "CUBIERTA" && nuevoEstado != "PAUSADA" && nuevoEstado != "CANCELADA" {
-			responderError(c, 400, "Estado de vacante inválido")
+			responderError(c, 400, "Estado de vacante invÃ¡lido")
 			return
 		}
 		estado = nuevoEstado
@@ -1737,7 +1700,7 @@ func (a *aplicacion) liberarVacante(c *gin.Context) {
 		return
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "LIBERAR", "VACANTE", id, "Vacante liberada a disponible")
-	c.JSON(200, gin.H{"mensaje": "Vacante liberada y disponible para nueva asignación"})
+	c.JSON(200, gin.H{"mensaje": "Vacante liberada y disponible para nueva asignaciÃ³n"})
 }
 
 func (a *aplicacion) empleadoActivo(id int64) error {
@@ -1750,7 +1713,7 @@ func (a *aplicacion) empleadoActivo(id int64) error {
 		return err
 	}
 	if activo == 0 {
-		return errors.New("El empleado está inactivo")
+		return errors.New("El empleado estÃ¡ inactivo")
 	}
 	return nil
 }
@@ -1802,7 +1765,7 @@ func (a *aplicacion) crearTurno(c *gin.Context) {
 		e.Estado = "PROGRAMADO"
 	}
 	if !estadoTurnoValido(e.Estado) {
-		responderError(c, 400, "estado de turno inválido")
+		responderError(c, 400, "estado de turno invÃ¡lido")
 		return
 	}
 	if e.Estado == "TRABAJADO" {
@@ -1810,7 +1773,7 @@ func (a *aplicacion) crearTurno(c *gin.Context) {
 			e.HorasTrabajadas = duracion
 		}
 		if e.HorasTrabajadas > duracion || e.HorasTrabajadas > 16 {
-			responderError(c, 400, "horas_trabajadas no puede superar la duración del turno ni 16 horas")
+			responderError(c, 400, "horas_trabajadas no puede superar la duraciÃ³n del turno ni 16 horas")
 			return
 		}
 	} else {
@@ -1839,7 +1802,7 @@ func (a *aplicacion) listarTurnos(c *gin.Context) {
 	}
 	d, err := fechaValida(desde)
 	if err != nil {
-		responderError(c, 400, "desde no tiene formato válido")
+		responderError(c, 400, "desde no tiene formato vÃ¡lido")
 		return
 	}
 	h, err := fechaValida(hasta)
@@ -1852,7 +1815,7 @@ func (a *aplicacion) listarTurnos(c *gin.Context) {
 	if raw := c.Query("empleado_id"); raw != "" {
 		id, er := strconv.ParseInt(raw, 10, 64)
 		if er != nil || id <= 0 {
-			responderError(c, 400, "empleado_id inválido")
+			responderError(c, 400, "empleado_id invÃ¡lido")
 			return
 		}
 		q += " AND t.empleado_id=?"
@@ -1881,7 +1844,7 @@ func (a *aplicacion) listarTurnos(c *gin.Context) {
 func (a *aplicacion) misTurnos(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !i.EmpleadoID.Valid {
-		responderError(c, 400, "Su usuario no está vinculado a un empleado")
+		responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 		return
 	}
 	desde := c.DefaultQuery("desde", time.Now().Format("2006-01-02"))
@@ -1918,7 +1881,7 @@ func (a *aplicacion) actualizarTurno(c *gin.Context) {
 		estado = normalizarMayusculas(*e.Estado)
 	}
 	if !estadoTurnoValido(estado) {
-		responderError(c, 400, "estado de turno inválido")
+		responderError(c, 400, "estado de turno invÃ¡lido")
 		return
 	}
 	if e.HorasTrabajadas != nil {
@@ -1933,7 +1896,7 @@ func (a *aplicacion) actualizarTurno(c *gin.Context) {
 			horas = duracion
 		}
 		if horas > duracion || horas > 16 {
-			responderError(c, 400, "horas_trabajadas inválidas")
+			responderError(c, 400, "horas_trabajadas invÃ¡lidas")
 			return
 		}
 	} else {
@@ -1973,7 +1936,7 @@ func (a *aplicacion) validarSuplente(solicitanteID, suplenteID int64, inicio, fi
 	var requiere, activo int
 	err := a.db.QueryRow(`SELECT e.sucursal_id,e.puesto_id,p.requiere_suplente,e.activo FROM empleados e JOIN puestos p ON p.id=e.puesto_id WHERE e.id=?`, solicitanteID).Scan(&sucursal, &puesto, &requiere, &activo)
 	if err != nil {
-		return errors.New("No se encontró al empleado solicitante")
+		return errors.New("No se encontrÃ³ al empleado solicitante")
 	}
 	var sucursalS, puestoS int64
 	var activoS int
@@ -1985,7 +1948,7 @@ func (a *aplicacion) validarSuplente(solicitanteID, suplenteID int64, inicio, fi
 		return err
 	}
 	if activoS == 0 {
-		return errors.New("El suplente está inactivo")
+		return errors.New("El suplente estÃ¡ inactivo")
 	}
 	if sucursal != sucursalS {
 		return errors.New("El suplente debe pertenecer a la misma sucursal")
@@ -2018,7 +1981,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !esAdministrador(i) {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no está vinculado a un empleado")
+			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 			return
 		}
 		e.EmpleadoID = i.EmpleadoID.Int64
@@ -2043,7 +2006,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 	}
 	e.Tipo = normalizarMayusculas(e.Tipo)
 	if e.Tipo != "VACACIONES" && e.Tipo != "ENFERMEDAD" && e.Tipo != "DESCANSO" && e.Tipo != "PERMISO_EXTRAORDINARIO" {
-		responderError(c, 400, "tipo de solicitud inválido")
+		responderError(c, 400, "tipo de solicitud invÃ¡lido")
 		return
 	}
 	motivo, err := textoRequerido(e.Motivo, 500, "motivo")
@@ -2061,7 +2024,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 		return
 	}
 	if activo == 0 {
-		responderError(c, 400, "El empleado está inactivo")
+		responderError(c, 400, "El empleado estÃ¡ inactivo")
 		return
 	}
 	var cruces int
@@ -2076,7 +2039,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 	}
 	necesita := requiere == 1 && contieneFinDeSemana(inicio, fin)
 	if necesita && e.SuplenteID == nil {
-		responderError(c, 400, "La ausencia de un puesto crítico en fin de semana exige suplente_id calificado")
+		responderError(c, 400, "La ausencia de un puesto crÃ­tico en fin de semana exige suplente_id calificado")
 		return
 	}
 	if !necesita && e.SuplenteID != nil {
@@ -2124,7 +2087,7 @@ func (a *aplicacion) consultaSolicitudes(c *gin.Context, propias bool) {
 	args := []any{}
 	if propias {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no está vinculado a un empleado")
+			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 			return
 		}
 		q += " WHERE sp.empleado_id=?"
@@ -2297,7 +2260,7 @@ func (a *aplicacion) dictaminarSolicitud(c *gin.Context, aprobada bool) {
 		return
 	}
 	if estado != "PENDIENTE_APROBACION" {
-		responderError(c, 409, "La solicitud no está lista para dictamen")
+		responderError(c, 409, "La solicitud no estÃ¡ lista para dictamen")
 		return
 	}
 	if requiere == 1 {
@@ -2346,7 +2309,7 @@ func (a *aplicacion) sueldoEmpleado(id int64) (int64, error) {
 		return 0, err
 	}
 	if activo == 0 {
-		return 0, errors.New("El empleado está inactivo")
+		return 0, errors.New("El empleado estÃ¡ inactivo")
 	}
 	return sueldo, nil
 }
@@ -2363,7 +2326,7 @@ func (a *aplicacion) solicitarPrestamo(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !esAdministrador(i) {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no está vinculado a un empleado")
+			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 			return
 		}
 		e.EmpleadoID = i.EmpleadoID.Int64
@@ -2397,8 +2360,8 @@ func (a *aplicacion) solicitarPrestamo(c *gin.Context) {
 		return
 	}
 	id, _ := r.LastInsertId()
-	a.registrarAuditoria(i.UsuarioID, "CREAR", "PRESTAMO", id, "Solicitud de préstamo")
-	c.JSON(201, gin.H{"id": id, "descuento_semanal_centavos": descuento, "mensaje": "Solicitud de préstamo registrada"})
+	a.registrarAuditoria(i.UsuarioID, "CREAR", "PRESTAMO", id, "Solicitud de prÃ©stamo")
+	c.JSON(201, gin.H{"id": id, "descuento_semanal_centavos": descuento, "mensaje": "Solicitud de prÃ©stamo registrada"})
 }
 func (a *aplicacion) consultaPrestamos(c *gin.Context, propios bool) {
 	i := obtenerIdentidad(c)
@@ -2406,7 +2369,7 @@ func (a *aplicacion) consultaPrestamos(c *gin.Context, propios bool) {
 	args := []any{}
 	if propios {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no está vinculado a un empleado")
+			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 			return
 		}
 		q += " WHERE pe.empleado_id=?"
@@ -2457,7 +2420,7 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 	var estado string
 	err := a.db.QueryRow(`SELECT empleado_id,monto_original_centavos,descuento_semanal_centavos,estado FROM prestamos_empleado WHERE id=?`, id).Scan(&empleado, &monto, &descuento, &estado)
 	if errors.Is(err, sql.ErrNoRows) {
-		responderError(c, 404, "Préstamo no encontrado")
+		responderError(c, 404, "PrÃ©stamo no encontrado")
 		return
 	}
 	if err != nil {
@@ -2465,7 +2428,7 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 		return
 	}
 	if estado != "PENDIENTE" {
-		responderError(c, 409, "El préstamo ya fue dictaminado")
+		responderError(c, 409, "El prÃ©stamo ya fue dictaminado")
 		return
 	}
 	if aprobar {
@@ -2480,7 +2443,7 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 			return
 		}
 		if (descuentosActuales+descuento)*100 > sueldo*40 {
-			responderError(c, 409, "La retención total activa excedería 40% del sueldo semanal")
+			responderError(c, 409, "La retenciÃ³n total activa excederÃ­a 40% del sueldo semanal")
 			return
 		}
 	}
@@ -2493,10 +2456,10 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 		return
 	}
 	if aprobar {
-		_ = a.registrarHistorico(empleado, "PRESTAMO", fmt.Sprintf("Préstamo aprobado por %d centavos", monto), time.Now().Format("2006-01-02"))
+		_ = a.registrarHistorico(empleado, "PRESTAMO", fmt.Sprintf("PrÃ©stamo aprobado por %d centavos", monto), time.Now().Format("2006-01-02"))
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, nuevo, "PRESTAMO", id, observacion)
-	c.JSON(200, gin.H{"estado": nuevo, "mensaje": "Préstamo " + strings.ToLower(nuevo) + " correctamente"})
+	c.JSON(200, gin.H{"estado": nuevo, "mensaje": "PrÃ©stamo " + strings.ToLower(nuevo) + " correctamente"})
 }
 func (a *aplicacion) aprobarPrestamo(c *gin.Context)  { a.dictaminarPrestamo(c, true) }
 func (a *aplicacion) rechazarPrestamo(c *gin.Context) { a.dictaminarPrestamo(c, false) }
@@ -2527,7 +2490,7 @@ func (a *aplicacion) registrarRetencion(c *gin.Context) {
 	var estado string
 	err = tx.QueryRow(`SELECT saldo_centavos,descuento_semanal_centavos,estado FROM prestamos_empleado WHERE id=?`, id).Scan(&saldo, &descuento, &estado)
 	if errors.Is(err, sql.ErrNoRows) {
-		responderError(c, 404, "Préstamo no encontrado")
+		responderError(c, 404, "PrÃ©stamo no encontrado")
 		return
 	}
 	if err != nil {
@@ -2535,7 +2498,7 @@ func (a *aplicacion) registrarRetencion(c *gin.Context) {
 		return
 	}
 	if estado != "APROBADO" {
-		responderError(c, 409, "Solo se pueden retener préstamos aprobados")
+		responderError(c, 409, "Solo se pueden retener prÃ©stamos aprobados")
 		return
 	}
 	monto := descuento
@@ -2548,7 +2511,7 @@ func (a *aplicacion) registrarRetencion(c *gin.Context) {
 	}
 	_, err = tx.Exec(`INSERT INTO retenciones_prestamo(prestamo_id,semana_inicio,monto_centavos) VALUES (?,?,?)`, id, semana, monto)
 	if err != nil {
-		responderError(c, 409, "Ya existe una retención para esa semana")
+		responderError(c, 409, "Ya existe una retenciÃ³n para esa semana")
 		return
 	}
 	nuevoSaldo := saldo - monto
@@ -2602,7 +2565,7 @@ func (a *aplicacion) crearBolsaPropinas(c *gin.Context) {
 		return
 	}
 	if activo == 0 {
-		responderError(c, 400, "La sucursal está inactiva")
+		responderError(c, 400, "La sucursal estÃ¡ inactiva")
 		return
 	}
 	r, err := a.db.Exec(`INSERT INTO propinas_bolsas(sucursal_id,fecha,monto_centavos) VALUES (?,?,?)`, e.SucursalID, e.Fecha, e.MontoCentavos)
@@ -2619,7 +2582,7 @@ func (a *aplicacion) listarBolsasPropinas(c *gin.Context) {
 	args := []any{}
 	if f := c.Query("fecha"); f != "" {
 		if _, err := fechaValida(f); err != nil {
-			responderError(c, 400, "fecha no tiene formato válido")
+			responderError(c, 400, "fecha no tiene formato vÃ¡lido")
 			return
 		}
 		q += " WHERE b.fecha=?"
@@ -2727,7 +2690,7 @@ func (a *aplicacion) calcularPropinas(c *gin.Context) {
 func (a *aplicacion) misPropinas(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !i.EmpleadoID.Valid {
-		responderError(c, 400, "Su usuario no está vinculado a un empleado")
+		responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 		return
 	}
 	filas, err := a.db.Query(`SELECT pa.id,b.id,b.fecha,s.nombre,pa.horas_ponderadas,pa.monto_centavos FROM propinas_asignacion pa JOIN propinas_bolsas b ON b.id=pa.bolsa_id JOIN sucursales s ON s.id=b.sucursal_id WHERE pa.empleado_id=? ORDER BY b.fecha DESC`, i.EmpleadoID.Int64)
@@ -2773,11 +2736,11 @@ func (a *aplicacion) enviarBuzon(c *gin.Context) {
 		e.Prioridad = "MEDIA"
 	}
 	if !tipoBuzonValido(e.Tipo) {
-		responderError(c, 400, "tipo de buzón inválido")
+		responderError(c, 400, "tipo de buzÃ³n invÃ¡lido")
 		return
 	}
 	if !prioridadValida(e.Prioridad) {
-		responderError(c, 400, "prioridad inválida")
+		responderError(c, 400, "prioridad invÃ¡lida")
 		return
 	}
 	asunto, err := textoRequerido(e.Asunto, 150, "asunto")
@@ -2806,7 +2769,7 @@ func (a *aplicacion) enviarBuzon(c *gin.Context) {
 	}
 	id, _ := r.LastInsertId()
 	a.registrarAuditoria(i.UsuarioID, "CREAR", "BUZON", id, e.Tipo)
-	c.JSON(201, gin.H{"id": id, "anonimo": e.Anonimo, "mensaje": "Reporte enviado al buzón"})
+	c.JSON(201, gin.H{"id": id, "anonimo": e.Anonimo, "mensaje": "Reporte enviado al buzÃ³n"})
 }
 func (a *aplicacion) consultaBuzon(c *gin.Context, propios bool) {
 	i := obtenerIdentidad(c)
@@ -2814,7 +2777,7 @@ func (a *aplicacion) consultaBuzon(c *gin.Context, propios bool) {
 	args := []any{}
 	if propios {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no está vinculado a un empleado")
+			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
 			return
 		}
 		q += " WHERE b.empleado_id=? AND b.anonimo=0"
@@ -2864,7 +2827,7 @@ func (a *aplicacion) atenderBuzon(c *gin.Context) {
 	}
 	e.Estado = normalizarMayusculas(e.Estado)
 	if e.Estado != "EN_REVISION" && e.Estado != "ATENDIDO" && e.Estado != "CERRADO" {
-		responderError(c, 400, "estado inválido; use EN_REVISION, ATENDIDO o CERRADO")
+		responderError(c, 400, "estado invÃ¡lido; use EN_REVISION, ATENDIDO o CERRADO")
 		return
 	}
 	respuesta := strings.TrimSpace(e.Respuesta)
@@ -2879,7 +2842,7 @@ func (a *aplicacion) atenderBuzon(c *gin.Context) {
 	}
 	afectadas, _ := r.RowsAffected()
 	if afectadas == 0 {
-		responderError(c, 404, "Reporte de buzón no encontrado")
+		responderError(c, 404, "Reporte de buzÃ³n no encontrado")
 		return
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ATENDER", "BUZON", id, e.Estado)
@@ -2909,7 +2872,7 @@ func (a *aplicacion) crearHistorico(c *gin.Context) {
 	}
 	e.Tipo = normalizarMayusculas(e.Tipo)
 	if !tipoHistoricoValido(e.Tipo) {
-		responderError(c, 400, "tipo de incidencia inválido")
+		responderError(c, 400, "tipo de incidencia invÃ¡lido")
 		return
 	}
 	desc, err := textoRequerido(e.Descripcion, 1000, "descripcion")
@@ -2928,7 +2891,7 @@ func (a *aplicacion) crearHistorico(c *gin.Context) {
 	}
 	id, _ := r.LastInsertId()
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "CREAR", "HISTORICO_INCIDENCIA", id, e.Tipo)
-	c.JSON(201, gin.H{"id": id, "mensaje": "Incidencia registrada; el histórico es inmutable"})
+	c.JSON(201, gin.H{"id": id, "mensaje": "Incidencia registrada; el histÃ³rico es inmutable"})
 }
 func (a *aplicacion) listarHistorico(c *gin.Context) {
 	q := `SELECT h.id,h.empleado_id,COALESCE(e.numero_empleado,''),COALESCE(e.nombres||' '||e.apellido_paterno,''),h.tipo,h.descripcion,h.fecha_evento,h.creado_en FROM historico_incidencias h LEFT JOIN empleados e ON e.id=h.empleado_id`
@@ -2936,7 +2899,7 @@ func (a *aplicacion) listarHistorico(c *gin.Context) {
 	if emp := c.Query("empleado_id"); emp != "" {
 		id, err := strconv.ParseInt(emp, 10, 64)
 		if err != nil || id <= 0 {
-			responderError(c, 400, "empleado_id inválido")
+			responderError(c, 400, "empleado_id invÃ¡lido")
 			return
 		}
 		q += " WHERE h.empleado_id=?"
@@ -2971,7 +2934,7 @@ func (a *aplicacion) reporteAusentismo(c *gin.Context) {
 	}
 	d, err := fechaValida(desde)
 	if err != nil {
-		responderError(c, 400, "desde no tiene formato válido")
+		responderError(c, 400, "desde no tiene formato vÃ¡lido")
 		return
 	}
 	h, err := fechaValida(hasta)
