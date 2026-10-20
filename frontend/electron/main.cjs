@@ -66,29 +66,6 @@ async function iniciarApi() {
 
   const rutaBd = path.join(carpetaDatos, 'padron.db');
 
-  // Si es una máquina limpia y aún no existe la BD en la ruta de datos,
-  // copiar la base inicial preconfigurada si existe en los recursos empaquetados.
-  if (!fs.existsSync(rutaBd)) {
-    const semillas = [
-      path.join(process.resourcesPath, 'backend', 'padron.db'),
-      path.resolve(__dirname, '..', 'recursos', 'padron.db'),
-      path.resolve(__dirname, '..', '..', 'entregable', 'padron.db'),
-      path.resolve(process.cwd(), 'recursos', 'padron.db'),
-      path.resolve(process.cwd(), 'entregable', 'padron.db'),
-    ];
-    for (const sem of semillas) {
-      if (fs.existsSync(sem)) {
-        try {
-          fs.copyFileSync(sem, rutaBd);
-          console.log(`[PADRON] Base de datos semilla inicial copiada desde ${sem}`);
-          break;
-        } catch (e) {
-          console.warn('[PADRON] Aviso al copiar base de datos semilla:', e);
-        }
-      }
-    }
-  }
-
   let ejecutable = '';
   if (app.isPackaged) {
     ejecutable = path.join(process.resourcesPath, 'backend', 'padron.exe');
