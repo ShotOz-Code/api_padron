@@ -1,4 +1,4 @@
-﻿// API de GestiÃ³n y Control Operativo para CÃ¡rnitas y Carne Asada PADRÃ“N.
+// API de Gestión y Control Operativo para Cárnitas y Carne Asada PADRÓN.
 // El ejecutable usa SQLite embebido: no necesita un servidor de base de datos.
 package main
 
@@ -92,7 +92,7 @@ func main() {
 	}
 	a := &aplicacion{db: db, secreto: secreto}
 	r := a.enrutador()
-	log.Printf("PADRÃ“N API escuchando en http://localhost:%d | Base de datos: %s", puerto, rutaBD)
+	log.Printf("PADRÓN API escuchando en http://localhost:%d | Base de datos: %s", puerto, rutaBD)
 	log.Fatal(r.Run(fmt.Sprintf(":%d", puerto)))
 }
 
@@ -189,8 +189,8 @@ func migrar(db *sql.DB) error {
             id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER REFERENCES usuarios(id), accion TEXT NOT NULL,
             entidad TEXT NOT NULL, entidad_id INTEGER, detalle TEXT, creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`,
-		`CREATE TRIGGER IF NOT EXISTS impedir_actualizar_historico BEFORE UPDATE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histÃ³rico de incidencias es inmutable'); END`,
-		`CREATE TRIGGER IF NOT EXISTS impedir_borrar_historico BEFORE DELETE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histÃ³rico de incidencias es inmutable'); END`,
+		`CREATE TRIGGER IF NOT EXISTS impedir_actualizar_historico BEFORE UPDATE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histórico de incidencias es inmutable'); END`,
+		`CREATE TRIGGER IF NOT EXISTS impedir_borrar_historico BEFORE DELETE ON historico_incidencias BEGIN SELECT RAISE(ABORT, 'El histórico de incidencias es inmutable'); END`,
 	}
 	for _, consulta := range esquema {
 		if _, err := db.Exec(consulta); err != nil {
@@ -212,6 +212,8 @@ func migrar(db *sql.DB) error {
         cubierta_en TEXT
     )`)
 	_, _ = db.Exec(`ALTER TABLE empleados ADD COLUMN vacante_id INTEGER REFERENCES vacantes(id)`)
+	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_vacantes_empleado_unico ON vacantes(empleado_id) WHERE empleado_id IS NOT NULL`)
+	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_empleados_vacante_unica ON empleados(vacante_id) WHERE vacante_id IS NOT NULL`)
 	return nil
 }
 
@@ -257,7 +259,7 @@ func (a *aplicacion) enrutador() *gin.Engine {
 	r := gin.New()
 	r.Use(corsMiddleware(), gin.Logger(), gin.Recovery(), limiteCuerpo())
 	r.GET("/salud", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"estado": "activo", "servicio": "PADRÃ“N RH API", "hora": time.Now().Format(time.RFC3339)})
+		c.JSON(http.StatusOK, gin.H{"estado": "activo", "servicio": "PADRÓN RH API", "hora": time.Now().Format(time.RFC3339)})
 	})
 	r.POST("/api/v1/autenticacion/iniciar-sesion", a.iniciarSesion)
 
@@ -267,6 +269,7 @@ func (a *aplicacion) enrutador() *gin.Engine {
 	api.POST("/mi-perfil/cambiar-contrasena", a.cambiarContrasena)
 	api.GET("/catalogos/sucursales", a.listarSucursales)
 	api.GET("/catalogos/puestos", a.listarPuestos)
+	api.GET("/empleados", a.listarEmpleados)
 	api.GET("/turnos/mios", a.misTurnos)
 	api.GET("/solicitudes-permisos/mias", a.misSolicitudes)
 	api.POST("/solicitudes-permisos", a.crearSolicitud)
@@ -280,7 +283,6 @@ func (a *aplicacion) enrutador() *gin.Engine {
 
 	gestion := api.Group("")
 	gestion.Use(requerirRoles(rolRH, rolEncargado))
-	gestion.GET("/empleados", a.listarEmpleados)
 	gestion.GET("/empleados/:id", a.obtenerEmpleado)
 	gestion.GET("/empleados/:id/kardex", a.obtenerKardexEmpleado)
 	gestion.POST("/empleados", a.crearEmpleado)
@@ -331,16 +333,16 @@ func responderError(c *gin.Context, estado int, mensaje string) {
 }
 func responderBD(c *gin.Context, err error) {
 	log.Printf("Error SQL: %v", err)
-	responderError(c, http.StatusInternalServerError, "OcurriÃ³ un error al procesar los datos")
+	responderError(c, http.StatusInternalServerError, "Ocurrió un error al procesar los datos")
 }
 
 func leerJSON(c *gin.Context, destino any) bool {
 	if err := c.ShouldBindJSON(destino); err != nil {
 		var syntax *json.SyntaxError
 		if errors.As(err, &syntax) || errors.Is(err, io.ErrUnexpectedEOF) {
-			responderError(c, http.StatusBadRequest, "El JSON no tiene un formato vÃ¡lido")
+			responderError(c, http.StatusBadRequest, "El JSON no tiene un formato válido")
 		} else {
-			responderError(c, http.StatusBadRequest, "Datos invÃ¡lidos: "+err.Error())
+			responderError(c, http.StatusBadRequest, "Datos inválidos: "+err.Error())
 		}
 		return false
 	}
@@ -403,10 +405,10 @@ func (a *aplicacion) iniciarSesion(c *gin.Context) {
 	var id int64
 	var empleado sql.NullInt64
 	var hash, rol string
-	var activo int
-	err := a.db.QueryRow(`SELECT id,empleado_id,contrasena_hash,rol,activo FROM usuarios WHERE nombre_usuario=? COLLATE NOCASE`, strings.TrimSpace(entrada.Usuario)).Scan(&id, &empleado, &hash, &rol, &activo)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && (activo == 0 || bcrypt.CompareHashAndPassword([]byte(hash), []byte(entrada.Contrasena)) != nil)) {
-		responderError(c, http.StatusUnauthorized, "Usuario o contraseÃ±a incorrectos")
+	var activo, empActivo int
+	err := a.db.QueryRow(`SELECT u.id,u.empleado_id,u.contrasena_hash,u.rol,u.activo,COALESCE(e.activo,1) FROM usuarios u LEFT JOIN empleados e ON e.id=u.empleado_id WHERE u.nombre_usuario=? COLLATE NOCASE`, strings.TrimSpace(entrada.Usuario)).Scan(&id, &empleado, &hash, &rol, &activo, &empActivo)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && (activo == 0 || empActivo == 0 || bcrypt.CompareHashAndPassword([]byte(hash), []byte(entrada.Contrasena)) != nil)) {
+		responderError(c, http.StatusUnauthorized, "Usuario o contraseña incorrectos")
 		return
 	}
 	if err != nil {
@@ -430,7 +432,7 @@ func (a *aplicacion) crearToken(id int64, rol string) (string, error) {
 func (a *aplicacion) validarToken(token string) (int64, string, error) {
 	partes := strings.Split(token, ".")
 	if len(partes) != 2 {
-		return 0, "", errors.New("token invÃ¡lido")
+		return 0, "", errors.New("token inválido")
 	}
 	carga, err := base64.RawURLEncoding.DecodeString(partes[0])
 	if err != nil {
@@ -443,15 +445,15 @@ func (a *aplicacion) validarToken(token string) (int64, string, error) {
 	esperada := hmac.New(sha256.New, a.secreto)
 	_, _ = esperada.Write(carga)
 	if !hmac.Equal(firma, esperada.Sum(nil)) {
-		return 0, "", errors.New("firma invÃ¡lida")
+		return 0, "", errors.New("firma inválida")
 	}
 	partesCarga := strings.Split(string(carga), "|")
 	if len(partesCarga) != 3 {
-		return 0, "", errors.New("carga invÃ¡lida")
+		return 0, "", errors.New("carga inválida")
 	}
 	id, err := strconv.ParseInt(partesCarga[0], 10, 64)
 	if err != nil || id <= 0 {
-		return 0, "", errors.New("id invÃ¡lido")
+		return 0, "", errors.New("id inválido")
 	}
 	expira, err := strconv.ParseInt(partesCarga[2], 10, 64)
 	if err != nil || time.Now().Unix() > expira {
@@ -470,15 +472,15 @@ func (a *aplicacion) autenticar() gin.HandlerFunc {
 		}
 		id, _, err := a.validarToken(partes[1])
 		if err != nil {
-			responderError(c, http.StatusUnauthorized, "Token invÃ¡lido o vencido")
+			responderError(c, http.StatusUnauthorized, "Token inválido o vencido")
 			c.Abort()
 			return
 		}
 		var identidadActual identidad
-		var activo int
-		err = a.db.QueryRow(`SELECT id,empleado_id,rol,activo FROM usuarios WHERE id=?`, id).Scan(&identidadActual.UsuarioID, &identidadActual.EmpleadoID, &identidadActual.Rol, &activo)
-		if err != nil || activo == 0 {
-			responderError(c, http.StatusUnauthorized, "La sesiÃ³n ya no estÃ¡ activa")
+		var activo, empActivo int
+		err = a.db.QueryRow(`SELECT u.id,u.empleado_id,u.rol,u.activo,COALESCE(e.activo,1) FROM usuarios u LEFT JOIN empleados e ON e.id=u.empleado_id WHERE u.id=?`, id).Scan(&identidadActual.UsuarioID, &identidadActual.EmpleadoID, &identidadActual.Rol, &activo, &empActivo)
+		if err != nil || activo == 0 || empActivo == 0 {
+			responderError(c, http.StatusUnauthorized, "La sesión ya no está activa")
 			c.Abort()
 			return
 		}
@@ -495,7 +497,7 @@ func requerirRoles(roles ...string) gin.HandlerFunc {
 				return
 			}
 		}
-		responderError(c, http.StatusForbidden, "No tiene permiso para esta operaciÃ³n")
+		responderError(c, http.StatusForbidden, "No tiene permiso para esta operación")
 		c.Abort()
 	}
 }
@@ -567,7 +569,7 @@ func (a *aplicacion) cambiarContrasena(c *gin.Context) {
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(entrada.ContrasenaActual)) != nil {
-		responderError(c, http.StatusUnauthorized, "La contraseÃ±a actual no es correcta")
+		responderError(c, http.StatusUnauthorized, "La contraseña actual no es correcta")
 		return
 	}
 	nuevoHash, err := bcrypt.GenerateFromPassword([]byte(entrada.ContrasenaNueva), bcrypt.DefaultCost)
@@ -580,7 +582,7 @@ func (a *aplicacion) cambiarContrasena(c *gin.Context) {
 		return
 	}
 	a.registrarAuditoria(i.UsuarioID, "CAMBIAR_CONTRASENA", "USUARIO", i.UsuarioID, "Cambio propio")
-	c.JSON(http.StatusOK, gin.H{"mensaje": "ContraseÃ±a actualizada correctamente"})
+	c.JSON(http.StatusOK, gin.H{"mensaje": "Contraseña actualizada correctamente"})
 }
 
 const consultaEmpleado = `SELECT e.id,e.numero_empleado,e.nombres,e.apellido_paterno,COALESCE(e.apellido_materno,''),COALESCE(e.curp,''),COALESCE(e.correo,''),COALESCE(e.telefono,''),e.fecha_ingreso,e.sueldo_semanal_centavos,e.sucursal_id,s.nombre,e.puesto_id,p.nombre,e.activo,COALESCE(jp.nombre,''),COALESCE(u.nombre_usuario,''),COALESCE(e.vacante_id,0),COALESCE(v.codigo,''),COALESCE(v.titulo,'') FROM empleados e JOIN sucursales s ON s.id=e.sucursal_id JOIN puestos p ON p.id=e.puesto_id LEFT JOIN puestos jp ON jp.id=p.jefe_puesto_id LEFT JOIN usuarios u ON u.empleado_id=e.id LEFT JOIN vacantes v ON v.id=e.vacante_id`
@@ -687,7 +689,7 @@ func (a *aplicacion) crearSucursal(c *gin.Context) {
 		responderError(c, 400, err.Error())
 		return
 	}
-	direccion, err := textoRequerido(e.Direccion, 250, "direcciÃ³n")
+	direccion, err := textoRequerido(e.Direccion, 250, "dirección")
 	if err != nil {
 		responderError(c, 400, err.Error())
 		return
@@ -738,7 +740,7 @@ func (a *aplicacion) actualizarSucursal(c *gin.Context) {
 		}
 	}
 	if e.Direccion != nil {
-		direccion, err = textoRequerido(*e.Direccion, 250, "direcciÃ³n")
+		direccion, err = textoRequerido(*e.Direccion, 250, "dirección")
 		if err != nil {
 			responderError(c, 400, err.Error())
 			return
@@ -754,12 +756,47 @@ func (a *aplicacion) actualizarSucursal(c *gin.Context) {
 			activo = 0
 		}
 	}
+	if activo == 0 {
+		var activos int
+		if err := a.db.QueryRow(`SELECT COUNT(*) FROM empleados WHERE sucursal_id=? AND activo=1`, id).Scan(&activos); err == nil && activos > 0 {
+			responderError(c, 409, "No se puede desactivar una sucursal que tiene colaboradores activos")
+			return
+		}
+	}
 	if _, err = a.db.Exec(`UPDATE sucursales SET nombre=?,direccion=?,telefono=?,activo=? WHERE id=?`, nombre, direccion, telefono, activo, id); err != nil {
-		responderError(c, 409, "No se pudo actualizar: el nombre ya estÃ¡ en uso")
+		responderError(c, 409, "No se pudo actualizar: el nombre ya está en uso")
 		return
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ACTUALIZAR", "SUCURSAL", id, nombre)
 	c.JSON(200, gin.H{"mensaje": "Sucursal actualizada correctamente"})
+}
+
+func (a *aplicacion) validarJefePuesto(idActual, jefeID int64) error {
+	if jefeID <= 0 {
+		return nil
+	}
+	if idActual > 0 && jefeID == idActual {
+		return errors.New("Un puesto no puede ser jefe de sí mismo")
+	}
+	actual := jefeID
+	for pasos := 0; pasos < 50 && actual > 0; pasos++ {
+		var padre int64
+		err := a.db.QueryRow(`SELECT COALESCE(jefe_puesto_id, 0) FROM puestos WHERE id=?`, actual).Scan(&padre)
+		if errors.Is(err, sql.ErrNoRows) {
+			if pasos == 0 {
+				return errors.New("El puesto jefe seleccionado no existe")
+			}
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if idActual > 0 && padre == idActual {
+			return errors.New("La jerarquía seleccionada genera un ciclo circular entre puestos")
+		}
+		actual = padre
+	}
+	return nil
 }
 
 func (a *aplicacion) crearPuesto(c *gin.Context) {
@@ -780,14 +817,22 @@ func (a *aplicacion) crearPuesto(c *gin.Context) {
 		return
 	}
 	if e.RequiereSuplente && !e.EsCritico {
-		responderError(c, 400, "Un puesto que requiere suplente debe ser crÃ­tico")
+		responderError(c, 400, "Un puesto que requiere suplente debe ser crítico")
 		return
 	}
 	if e.FactorPropina <= 0 || e.FactorPropina > 5 {
 		responderError(c, 400, "factor_propina debe estar entre 0.01 y 5")
 		return
 	}
-	r, err := a.db.Exec(`INSERT INTO puestos(nombre,descripcion,es_critico,requiere_suplente,factor_propina,jefe_puesto_id) VALUES (?,?,?,?,?,?)`, nombre, strings.TrimSpace(e.Descripcion), boolAInt(e.EsCritico), boolAInt(e.RequiereSuplente), e.FactorPropina, e.JefePuestoID)
+	var jefeParam any = nil
+	if e.JefePuestoID != nil && *e.JefePuestoID > 0 {
+		if err := a.validarJefePuesto(0, *e.JefePuestoID); err != nil {
+			responderError(c, 400, err.Error())
+			return
+		}
+		jefeParam = *e.JefePuestoID
+	}
+	r, err := a.db.Exec(`INSERT INTO puestos(nombre,descripcion,es_critico,requiere_suplente,factor_propina,jefe_puesto_id) VALUES (?,?,?,?,?,?)`, nombre, strings.TrimSpace(e.Descripcion), boolAInt(e.EsCritico), boolAInt(e.RequiereSuplente), e.FactorPropina, jefeParam)
 	if err != nil {
 		responderError(c, 409, "Ya existe un puesto con ese nombre")
 		return
@@ -850,18 +895,29 @@ func (a *aplicacion) actualizarPuesto(c *gin.Context) {
 	}
 	if e.JefePuestoID != nil {
 		if *e.JefePuestoID > 0 {
+			if err := a.validarJefePuesto(id, *e.JefePuestoID); err != nil {
+				responderError(c, 400, err.Error())
+				return
+			}
 			jefeID = sql.NullInt64{Int64: *e.JefePuestoID, Valid: true}
 		} else {
 			jefeID = sql.NullInt64{Valid: false}
 		}
 	}
 	if suplente == 1 && critico == 0 {
-		responderError(c, 400, "Un puesto que requiere suplente debe ser crÃ­tico")
+		responderError(c, 400, "Un puesto que requiere suplente debe ser crítico")
 		return
 	}
 	if factor <= 0 || factor > 5 {
 		responderError(c, 400, "factor_propina debe estar entre 0.01 y 5")
 		return
+	}
+	if activo == 0 {
+		var activos int
+		if err := a.db.QueryRow(`SELECT COUNT(*) FROM empleados WHERE puesto_id=? AND activo=1`, id).Scan(&activos); err == nil && activos > 0 {
+			responderError(c, 409, "No se puede desactivar un puesto que tiene colaboradores activos")
+			return
+		}
 	}
 	if _, err = a.db.Exec(`UPDATE puestos SET nombre=?,descripcion=?,es_critico=?,requiere_suplente=?,factor_propina=?,activo=?,jefe_puesto_id=? WHERE id=?`, nombre, desc, critico, suplente, factor, activo, jefeID, id); err != nil {
 		responderError(c, 409, "No se pudo actualizar el puesto")
@@ -928,7 +984,7 @@ func (a *aplicacion) crearUsuario(c *gin.Context) {
 	}
 	entrada.Rol = normalizarMayusculas(entrada.Rol)
 	if !rolValido(entrada.Rol) {
-		responderError(c, http.StatusBadRequest, "rol invÃ¡lido")
+		responderError(c, http.StatusBadRequest, "rol inválido")
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(entrada.Contrasena), bcrypt.DefaultCost)
@@ -938,7 +994,7 @@ func (a *aplicacion) crearUsuario(c *gin.Context) {
 	}
 	r, err := a.db.Exec(`INSERT INTO usuarios(empleado_id,nombre_usuario,contrasena_hash,rol) VALUES (?,?,?,?)`, entrada.EmpleadoID, usuario, hash, entrada.Rol)
 	if err != nil {
-		responderError(c, http.StatusConflict, "El empleado ya tiene usuario o el nombre de usuario estÃ¡ en uso")
+		responderError(c, http.StatusConflict, "El empleado ya tiene usuario o el nombre de usuario está en uso")
 		return
 	}
 	id, _ := r.LastInsertId()
@@ -993,7 +1049,7 @@ func (a *aplicacion) actualizarUsuario(c *gin.Context) {
 	if entrada.Rol != nil {
 		rolNuevo = normalizarMayusculas(*entrada.Rol)
 		if !rolValido(rolNuevo) {
-			responderError(c, http.StatusBadRequest, "rol invÃ¡lido")
+			responderError(c, http.StatusBadRequest, "rol inválido")
 			return
 		}
 	}
@@ -1045,7 +1101,7 @@ func validarEntradaEmpleado(e *entradaEmpleado) error {
 	}
 	for _, r := range e.NumeroEmpleado {
 		if !(r >= 'A' && r <= 'Z') && !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '-' && r != '_' {
-			return errors.New("numero_empleado solo admite letras, nÃºmeros, guion y guion bajo")
+			return errors.New("numero_empleado solo admite letras, números, guion y guion bajo")
 		}
 	}
 	if e.Nombres, err = textoRequerido(e.Nombres, 80, "nombres"); err != nil {
@@ -1059,10 +1115,10 @@ func validarEntradaEmpleado(e *entradaEmpleado) error {
 	e.Correo = strings.ToLower(strings.TrimSpace(e.Correo))
 	e.Telefono = strings.TrimSpace(e.Telefono)
 	if !esCURPValida(e.CURP) {
-		return errors.New("CURP debe tener 18 caracteres alfanumÃ©ricos en mayÃºscula")
+		return errors.New("CURP debe tener 18 caracteres alfanuméricos en mayúscula")
 	}
 	if !esCorreoValido(e.Correo) {
-		return errors.New("correo no tiene un formato vÃ¡lido")
+		return errors.New("correo no tiene un formato válido")
 	}
 	if len(e.Telefono) > 25 {
 		return errors.New("telefono no puede exceder 25 caracteres")
@@ -1094,7 +1150,7 @@ func validarEntradaEmpleado(e *entradaEmpleado) error {
 			e.Rol = rolOperativo
 		}
 		if e.Rol != rolOperativo && e.Rol != rolEncargado && e.Rol != rolRH {
-			return errors.New("rol invÃ¡lido")
+			return errors.New("rol inválido")
 		}
 	}
 	return nil
@@ -1106,14 +1162,14 @@ func (a *aplicacion) validarSucursalYPuesto(sucursalID, puestoID int64) error {
 	} else if err != nil {
 		return err
 	} else if activo == 0 {
-		return errors.New("La sucursal estÃ¡ inactiva")
+		return errors.New("La sucursal está inactiva")
 	}
 	if err := a.db.QueryRow(`SELECT activo FROM puestos WHERE id=?`, puestoID).Scan(&activo); errors.Is(err, sql.ErrNoRows) {
 		return errors.New("puesto_id no existe")
 	} else if err != nil {
 		return err
 	} else if activo == 0 {
-		return errors.New("El puesto estÃ¡ inactivo")
+		return errors.New("El puesto está inactivo")
 	}
 	return nil
 }
@@ -1138,11 +1194,28 @@ func (a *aplicacion) crearEmpleado(c *gin.Context) {
 	defer tx.Rollback()
 	var vacanteID any = nil
 	if e.VacanteID != nil && *e.VacanteID > 0 {
+		var vacPuestoID, vacSucursalID int64
+		var vacEstado string
+		var vacEmpID sql.NullInt64
+		err := tx.QueryRow(`SELECT puesto_id, sucursal_id, estado, empleado_id FROM vacantes WHERE id=?`, *e.VacanteID).Scan(&vacPuestoID, &vacSucursalID, &vacEstado, &vacEmpID)
+		if errors.Is(err, sql.ErrNoRows) {
+			responderError(c, 404, "La vacante seleccionada no existe")
+			return
+		} else if err != nil {
+			responderBD(c, err)
+			return
+		}
+		if vacEstado != "DISPONIBLE" || vacEmpID.Valid {
+			responderError(c, 409, "La vacante seleccionada ya está ocupada o no se encuentra disponible")
+			return
+		}
+		e.PuestoID = vacPuestoID
+		e.SucursalID = vacSucursalID
 		vacanteID = *e.VacanteID
 	}
 	r, err := tx.Exec(`INSERT INTO empleados(numero_empleado,nombres,apellido_paterno,apellido_materno,curp,correo,telefono,fecha_ingreso,sueldo_semanal_centavos,sucursal_id,puesto_id,vacante_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, e.NumeroEmpleado, e.Nombres, e.ApellidoPaterno, nuloTexto(e.ApellidoMaterno), nuloTexto(e.CURP), nuloTexto(e.Correo), nuloTexto(e.Telefono), e.FechaIngreso, e.SueldoSemanalCentavos, e.SucursalID, e.PuestoID, vacanteID)
 	if err != nil {
-		responderError(c, 409, "No se pudo crear: nÃºmero, CURP o correo ya existen")
+		responderError(c, 409, "No se pudo crear: número, CURP o correo ya existen")
 		return
 	}
 	id, _ := r.LastInsertId()
@@ -1158,7 +1231,7 @@ func (a *aplicacion) crearEmpleado(c *gin.Context) {
 		}
 		ur, err := tx.Exec(`INSERT INTO usuarios(empleado_id,nombre_usuario,contrasena_hash,rol) VALUES (?,?,?,?)`, id, strings.TrimSpace(e.Usuario), hash, e.Rol)
 		if err != nil {
-			responderError(c, 409, "El nombre de usuario ya estÃ¡ en uso")
+			responderError(c, 409, "El nombre de usuario ya está en uso")
 			return
 		}
 		usuarioID, _ = ur.LastInsertId()
@@ -1216,6 +1289,7 @@ func (a *aplicacion) listarEmpleados(c *gin.Context) {
 		return
 	}
 	defer filas.Close()
+	esGest := esAdministrador(obtenerIdentidad(c))
 	resultado := []empleadoRespuesta{}
 	for filas.Next() {
 		var e empleadoRespuesta
@@ -1226,6 +1300,12 @@ func (a *aplicacion) listarEmpleados(c *gin.Context) {
 		}
 		if vacanteID > 0 {
 			e.VacanteID = &vacanteID
+		}
+		if !esGest {
+			e.CURP = ""
+			e.Correo = ""
+			e.Telefono = ""
+			e.SueldoSemanalCentavos = 0
 		}
 		resultado = append(resultado, e)
 	}
@@ -1269,10 +1349,10 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 	if !leerJSON(c, &entrada) {
 		return
 	}
-	var sucursal, puesto, sueldo int64
+	var sucursal, puesto, sueldo, vacanteActual int64
 	var correo, telefono string
 	var activo int
-	err := a.db.QueryRow(`SELECT sucursal_id,puesto_id,sueldo_semanal_centavos,COALESCE(correo,''),COALESCE(telefono,''),activo FROM empleados WHERE id=?`, id).Scan(&sucursal, &puesto, &sueldo, &correo, &telefono, &activo)
+	err := a.db.QueryRow(`SELECT sucursal_id,puesto_id,sueldo_semanal_centavos,COALESCE(correo,''),COALESCE(telefono,''),activo,COALESCE(vacante_id,0) FROM empleados WHERE id=?`, id).Scan(&sucursal, &puesto, &sueldo, &correo, &telefono, &activo, &vacanteActual)
 	if errors.Is(err, sql.ErrNoRows) {
 		responderError(c, 404, "Empleado no encontrado")
 		return
@@ -1280,6 +1360,9 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 	if err != nil {
 		responderBD(c, err)
 		return
+	}
+	if vacanteActual == 0 {
+		_ = a.db.QueryRow(`SELECT id FROM vacantes WHERE empleado_id=? AND estado='CUBIERTA' LIMIT 1`, id).Scan(&vacanteActual)
 	}
 	puestoAnterior := puesto
 	sueldoAnterior := sueldo
@@ -1295,7 +1378,7 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 	if entrada.Correo != nil {
 		correo = strings.ToLower(strings.TrimSpace(*entrada.Correo))
 		if !esCorreoValido(correo) {
-			responderError(c, 400, "correo no tiene un formato vÃ¡lido")
+			responderError(c, 400, "correo no tiene un formato válido")
 			return
 		}
 	}
@@ -1313,24 +1396,82 @@ func (a *aplicacion) actualizarEmpleado(c *gin.Context) {
 		responderError(c, 400, "sueldo_semanal_centavos debe ser mayor a cero")
 		return
 	}
+
+	vacanteFinal := vacanteActual
+	if activo == 0 {
+		vacanteFinal = 0
+	} else if entrada.VacanteID != nil {
+		nuevaVacante := *entrada.VacanteID
+		if nuevaVacante > 0 {
+			if vacanteActual > 0 && nuevaVacante != vacanteActual {
+				responderError(c, 409, "El colaborador ya tiene un puesto/plaza asignado. Un empleado solamente puede tener un puesto a la vez; primero debe liberar su plaza actual.")
+				return
+			}
+			var vacPuestoID, vacSucursalID int64
+			var vacEstado string
+			var vacEmpID sql.NullInt64
+			err := a.db.QueryRow(`SELECT puesto_id, sucursal_id, estado, empleado_id FROM vacantes WHERE id=?`, nuevaVacante).Scan(&vacPuestoID, &vacSucursalID, &vacEstado, &vacEmpID)
+			if errors.Is(err, sql.ErrNoRows) {
+				responderError(c, 404, "La vacante seleccionada no existe")
+				return
+			} else if err != nil {
+				responderBD(c, err)
+				return
+			}
+			if (vacEstado != "DISPONIBLE" || vacEmpID.Valid) && (!vacEmpID.Valid || vacEmpID.Int64 != id) {
+				responderError(c, 409, "La vacante seleccionada ya está ocupada por otro colaborador o no está disponible")
+				return
+			}
+			puesto = vacPuestoID
+			sucursal = vacSucursalID
+			vacanteFinal = nuevaVacante
+		} else {
+			vacanteFinal = 0
+		}
+	} else if vacanteActual > 0 {
+		var vacPuestoID, vacSucursalID int64
+		if err := a.db.QueryRow(`SELECT puesto_id, sucursal_id FROM vacantes WHERE id=?`, vacanteActual).Scan(&vacPuestoID, &vacSucursalID); err == nil {
+			if puesto != vacPuestoID || sucursal != vacSucursalID {
+				responderError(c, 409, "El colaborador tiene una plaza activa asignada. Un empleado solamente puede tener un puesto a la vez; libere su plaza actual antes de cambiarle el puesto o sucursal.")
+				return
+			}
+		}
+	}
+
 	if err := a.validarSucursalYPuesto(sucursal, puesto); err != nil {
 		responderError(c, 400, err.Error())
 		return
 	}
-	if _, err = a.db.Exec(`UPDATE empleados SET sucursal_id=?,puesto_id=?,sueldo_semanal_centavos=?,correo=?,telefono=?,activo=? WHERE id=?`, sucursal, puesto, sueldo, nuloTexto(correo), nuloTexto(telefono), activo, id); err != nil {
-		responderError(c, 409, "No se pudo actualizar el empleado; correo duplicado")
+	tx, err := a.db.Begin()
+	if err != nil {
+		responderBD(c, err)
 		return
 	}
-	if entrada.VacanteID != nil {
-		nuevaVacante := *entrada.VacanteID
-		if nuevaVacante > 0 {
-			_, _ = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL WHERE empleado_id=? AND id!=?`, id, nuevaVacante)
-			_, _ = a.db.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=CURRENT_TIMESTAMP WHERE id=?`, id, nuevaVacante)
-			_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=? WHERE id=?`, nuevaVacante, id)
-		} else {
-			_, _ = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL WHERE empleado_id=?`, id)
-			_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=NULL WHERE id=?`, id)
+	defer tx.Rollback()
+
+	var vacanteDB any = nil
+	if vacanteFinal > 0 {
+		vacanteDB = vacanteFinal
+	}
+	if _, err = tx.Exec(`UPDATE empleados SET sucursal_id=?,puesto_id=?,vacante_id=?,sueldo_semanal_centavos=?,correo=?,telefono=?,activo=? WHERE id=?`, sucursal, puesto, vacanteDB, sueldo, nuloTexto(correo), nuloTexto(telefono), activo, id); err != nil {
+		responderError(c, 409, "No se pudo actualizar el empleado; correo duplicado o plaza en uso")
+		return
+	}
+	if vacanteFinal > 0 {
+		_, _ = tx.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL, cubierta_en=NULL WHERE empleado_id=? AND id!=?`, id, vacanteFinal)
+		if _, err = tx.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=COALESCE(cubierta_en, CURRENT_TIMESTAMP) WHERE id=?`, id, vacanteFinal); err != nil {
+			responderBD(c, err)
+			return
 		}
+	} else {
+		_, _ = tx.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL, cubierta_en=NULL WHERE empleado_id=?`, id)
+	}
+	if activo == 0 {
+		_, _ = tx.Exec(`UPDATE usuarios SET activo=0 WHERE empleado_id=?`, id)
+	}
+	if err := tx.Commit(); err != nil {
+		responderBD(c, err)
+		return
 	}
 	hoy := time.Now().Format("2006-01-02")
 	if puesto != puestoAnterior {
@@ -1549,12 +1690,12 @@ func (a *aplicacion) crearVacante(c *gin.Context) {
 	if !leerJSON(c, &e) {
 		return
 	}
-	codigo, err := textoRequerido(e.Codigo, 30, "cÃ³digo")
+	codigo, err := textoRequerido(e.Codigo, 30, "código")
 	if err != nil {
 		responderError(c, 400, err.Error())
 		return
 	}
-	titulo, err := textoRequerido(e.Titulo, 150, "tÃ­tulo")
+	titulo, err := textoRequerido(e.Titulo, 150, "título")
 	if err != nil {
 		responderError(c, 400, err.Error())
 		return
@@ -1565,7 +1706,7 @@ func (a *aplicacion) crearVacante(c *gin.Context) {
 	}
 	r, err := a.db.Exec(`INSERT INTO vacantes(codigo, titulo, puesto_id, sucursal_id, estado, sueldo_ofertado_centavos, requisitos) VALUES (?,?,?,?,'DISPONIBLE',?,?)`, codigo, titulo, e.PuestoID, e.SucursalID, e.SueldoOfertadoCentavos, strings.TrimSpace(e.Requisitos))
 	if err != nil {
-		responderError(c, 409, "Ya existe una vacante con ese cÃ³digo")
+		responderError(c, 409, "Ya existe una vacante con ese código")
 		return
 	}
 	id, _ := r.LastInsertId()
@@ -1602,7 +1743,7 @@ func (a *aplicacion) actualizarVacante(c *gin.Context) {
 		return
 	}
 	if e.Titulo != nil {
-		titulo, err = textoRequerido(*e.Titulo, 150, "tÃ­tulo")
+		titulo, err = textoRequerido(*e.Titulo, 150, "título")
 		if err != nil {
 			responderError(c, 400, err.Error())
 			return
@@ -1623,7 +1764,7 @@ func (a *aplicacion) actualizarVacante(c *gin.Context) {
 	if e.Estado != nil {
 		nuevoEstado := normalizarMayusculas(*e.Estado)
 		if nuevoEstado != "DISPONIBLE" && nuevoEstado != "CUBIERTA" && nuevoEstado != "PAUSADA" && nuevoEstado != "CANCELADA" {
-			responderError(c, 400, "Estado de vacante invÃ¡lido")
+			responderError(c, 400, "Estado de vacante inválido")
 			return
 		}
 		estado = nuevoEstado
@@ -1632,8 +1773,31 @@ func (a *aplicacion) actualizarVacante(c *gin.Context) {
 		responderError(c, 400, err.Error())
 		return
 	}
-	_, err = a.db.Exec(`UPDATE vacantes SET titulo=?, puesto_id=?, sucursal_id=?, estado=?, sueldo_ofertado_centavos=?, requisitos=? WHERE id=?`, titulo, puestoID, sucursalID, estado, sueldo, requisitos, id)
+	if estado == "CUBIERTA" && (!empID.Valid || empID.Int64 <= 0) {
+		responderError(c, 400, "No se puede marcar como CUBIERTA una vacante sin colaborador asignado; utilice la opción Asignar")
+		return
+	}
+	tx, err := a.db.Begin()
 	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	defer tx.Rollback()
+
+	if empID.Valid && empID.Int64 > 0 && estado != "CUBIERTA" {
+		_, _ = tx.Exec(`UPDATE empleados SET vacante_id=NULL WHERE id=?`, empID.Int64)
+		_, err = tx.Exec(`UPDATE vacantes SET titulo=?, puesto_id=?, sucursal_id=?, estado=?, empleado_id=NULL, cubierta_en=NULL, sueldo_ofertado_centavos=?, requisitos=? WHERE id=?`, titulo, puestoID, sucursalID, estado, sueldo, requisitos, id)
+	} else {
+		_, err = tx.Exec(`UPDATE vacantes SET titulo=?, puesto_id=?, sucursal_id=?, estado=?, sueldo_ofertado_centavos=?, requisitos=? WHERE id=?`, titulo, puestoID, sucursalID, estado, sueldo, requisitos, id)
+		if err == nil && empID.Valid && empID.Int64 > 0 && estado == "CUBIERTA" {
+			_, _ = tx.Exec(`UPDATE empleados SET puesto_id=?, sucursal_id=?, vacante_id=? WHERE id=?`, puestoID, sucursalID, id, empID.Int64)
+		}
+	}
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		responderBD(c, err)
 		return
 	}
@@ -1657,24 +1821,78 @@ func (a *aplicacion) asignarVacante(c *gin.Context) {
 		return
 	}
 	var puestoID, sucursalID int64
-	err := a.db.QueryRow(`SELECT puesto_id, sucursal_id FROM vacantes WHERE id=?`, id).Scan(&puestoID, &sucursalID)
+	var vacEstado string
+	var vacEmpID sql.NullInt64
+	err := a.db.QueryRow(`SELECT puesto_id, sucursal_id, estado, empleado_id FROM vacantes WHERE id=?`, id).Scan(&puestoID, &sucursalID, &vacEstado, &vacEmpID)
 	if errors.Is(err, sql.ErrNoRows) {
 		responderError(c, 404, "Vacante no encontrada")
 		return
 	}
-	var empNombre string
-	err = a.db.QueryRow(`SELECT nombres||' '||apellido_paterno FROM empleados WHERE id=?`, e.EmpleadoID).Scan(&empNombre)
-	if errors.Is(err, sql.ErrNoRows) {
-		responderError(c, 404, "Empleado no encontrado")
-		return
-	}
-	_, _ = a.db.Exec(`UPDATE vacantes SET estado='DISPONIBLE', empleado_id=NULL WHERE empleado_id=?`, e.EmpleadoID)
-	_, err = a.db.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=CURRENT_TIMESTAMP WHERE id=?`, e.EmpleadoID, id)
 	if err != nil {
 		responderBD(c, err)
 		return
 	}
-	_, _ = a.db.Exec(`UPDATE empleados SET vacante_id=?, puesto_id=?, sucursal_id=? WHERE id=?`, id, puestoID, sucursalID, e.EmpleadoID)
+	if vacEstado != "DISPONIBLE" || vacEmpID.Valid {
+		responderError(c, 409, "La vacante seleccionada ya está ocupada o no se encuentra disponible para asignación")
+		return
+	}
+
+	var empNombre string
+	var empActivo int
+	var empPuestoAnterior, empVacanteActual int64
+	err = a.db.QueryRow(`SELECT nombres||' '||apellido_paterno, activo, puesto_id, COALESCE(vacante_id, 0) FROM empleados WHERE id=?`, e.EmpleadoID).Scan(&empNombre, &empActivo, &empPuestoAnterior, &empVacanteActual)
+	if errors.Is(err, sql.ErrNoRows) {
+		responderError(c, 404, "Empleado no encontrado")
+		return
+	}
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	if empActivo == 0 {
+		responderError(c, 400, "No se puede asignar una plaza a un colaborador dado de baja")
+		return
+	}
+
+	var vacCodigoOcupada, vacTituloOcupada string
+	errOcupada := a.db.QueryRow(`SELECT codigo, titulo FROM vacantes WHERE (empleado_id=? AND estado='CUBIERTA') OR id=? LIMIT 1`, e.EmpleadoID, empVacanteActual).Scan(&vacCodigoOcupada, &vacTituloOcupada)
+	if empVacanteActual > 0 || errOcupada == nil {
+		detallePlaza := vacCodigoOcupada
+		if vacTituloOcupada != "" {
+			detallePlaza = fmt.Sprintf("%s — %s", vacCodigoOcupada, vacTituloOcupada)
+		}
+		if detallePlaza != "" {
+			responderError(c, 409, fmt.Sprintf("El colaborador %s ya tiene asignado un puesto (%s). Un empleado solamente puede tener un puesto a la vez; libere primero su plaza actual.", empNombre, detallePlaza))
+		} else {
+			responderError(c, 409, fmt.Sprintf("El colaborador %s ya tiene un puesto asignado. Un empleado solamente puede tener un puesto a la vez; libere primero su plaza actual.", empNombre))
+		}
+		return
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`UPDATE vacantes SET estado='CUBIERTA', empleado_id=?, cubierta_en=CURRENT_TIMESTAMP WHERE id=?`, e.EmpleadoID, id)
+	if err != nil {
+		responderBD(c, err)
+		return
+	}
+	if _, err = tx.Exec(`UPDATE empleados SET vacante_id=?, puesto_id=?, sucursal_id=? WHERE id=?`, id, puestoID, sucursalID, e.EmpleadoID); err != nil {
+		responderBD(c, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		responderBD(c, err)
+		return
+	}
+	if puestoID != empPuestoAnterior {
+		hoy := time.Now().Format("2006-01-02")
+		_ = a.registrarHistorico(e.EmpleadoID, "CAMBIO_PUESTO", fmt.Sprintf("Cambio de puesto %d a %d por asignación de plaza", empPuestoAnterior, puestoID), hoy)
+	}
 
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ASIGNAR", "VACANTE", id, fmt.Sprintf("Asignada a %s", empNombre))
 	c.JSON(200, gin.H{"mensaje": fmt.Sprintf("Vacante asignada exitosamente a %s", empNombre)})
@@ -1700,7 +1918,7 @@ func (a *aplicacion) liberarVacante(c *gin.Context) {
 		return
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "LIBERAR", "VACANTE", id, "Vacante liberada a disponible")
-	c.JSON(200, gin.H{"mensaje": "Vacante liberada y disponible para nueva asignaciÃ³n"})
+	c.JSON(200, gin.H{"mensaje": "Vacante liberada y disponible para nueva asignación"})
 }
 
 func (a *aplicacion) empleadoActivo(id int64) error {
@@ -1713,7 +1931,7 @@ func (a *aplicacion) empleadoActivo(id int64) error {
 		return err
 	}
 	if activo == 0 {
-		return errors.New("El empleado estÃ¡ inactivo")
+		return errors.New("El empleado está inactivo")
 	}
 	return nil
 }
@@ -1765,7 +1983,7 @@ func (a *aplicacion) crearTurno(c *gin.Context) {
 		e.Estado = "PROGRAMADO"
 	}
 	if !estadoTurnoValido(e.Estado) {
-		responderError(c, 400, "estado de turno invÃ¡lido")
+		responderError(c, 400, "estado de turno inválido")
 		return
 	}
 	if e.Estado == "TRABAJADO" {
@@ -1773,7 +1991,7 @@ func (a *aplicacion) crearTurno(c *gin.Context) {
 			e.HorasTrabajadas = duracion
 		}
 		if e.HorasTrabajadas > duracion || e.HorasTrabajadas > 16 {
-			responderError(c, 400, "horas_trabajadas no puede superar la duraciÃ³n del turno ni 16 horas")
+			responderError(c, 400, "horas_trabajadas no puede superar la duración del turno ni 16 horas")
 			return
 		}
 	} else {
@@ -1802,7 +2020,7 @@ func (a *aplicacion) listarTurnos(c *gin.Context) {
 	}
 	d, err := fechaValida(desde)
 	if err != nil {
-		responderError(c, 400, "desde no tiene formato vÃ¡lido")
+		responderError(c, 400, "desde no tiene formato válido")
 		return
 	}
 	h, err := fechaValida(hasta)
@@ -1815,7 +2033,7 @@ func (a *aplicacion) listarTurnos(c *gin.Context) {
 	if raw := c.Query("empleado_id"); raw != "" {
 		id, er := strconv.ParseInt(raw, 10, 64)
 		if er != nil || id <= 0 {
-			responderError(c, 400, "empleado_id invÃ¡lido")
+			responderError(c, 400, "empleado_id inválido")
 			return
 		}
 		q += " AND t.empleado_id=?"
@@ -1844,7 +2062,7 @@ func (a *aplicacion) listarTurnos(c *gin.Context) {
 func (a *aplicacion) misTurnos(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !i.EmpleadoID.Valid {
-		responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+		responderError(c, 400, "Su usuario no está vinculado a un empleado")
 		return
 	}
 	desde := c.DefaultQuery("desde", time.Now().Format("2006-01-02"))
@@ -1881,7 +2099,7 @@ func (a *aplicacion) actualizarTurno(c *gin.Context) {
 		estado = normalizarMayusculas(*e.Estado)
 	}
 	if !estadoTurnoValido(estado) {
-		responderError(c, 400, "estado de turno invÃ¡lido")
+		responderError(c, 400, "estado de turno inválido")
 		return
 	}
 	if e.HorasTrabajadas != nil {
@@ -1896,7 +2114,7 @@ func (a *aplicacion) actualizarTurno(c *gin.Context) {
 			horas = duracion
 		}
 		if horas > duracion || horas > 16 {
-			responderError(c, 400, "horas_trabajadas invÃ¡lidas")
+			responderError(c, 400, "horas_trabajadas inválidas")
 			return
 		}
 	} else {
@@ -1936,7 +2154,7 @@ func (a *aplicacion) validarSuplente(solicitanteID, suplenteID int64, inicio, fi
 	var requiere, activo int
 	err := a.db.QueryRow(`SELECT e.sucursal_id,e.puesto_id,p.requiere_suplente,e.activo FROM empleados e JOIN puestos p ON p.id=e.puesto_id WHERE e.id=?`, solicitanteID).Scan(&sucursal, &puesto, &requiere, &activo)
 	if err != nil {
-		return errors.New("No se encontrÃ³ al empleado solicitante")
+		return errors.New("No se encontró al empleado solicitante")
 	}
 	var sucursalS, puestoS int64
 	var activoS int
@@ -1948,7 +2166,7 @@ func (a *aplicacion) validarSuplente(solicitanteID, suplenteID int64, inicio, fi
 		return err
 	}
 	if activoS == 0 {
-		return errors.New("El suplente estÃ¡ inactivo")
+		return errors.New("El suplente está inactivo")
 	}
 	if sucursal != sucursalS {
 		return errors.New("El suplente debe pertenecer a la misma sucursal")
@@ -1981,7 +2199,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !esAdministrador(i) {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+			responderError(c, 400, "Su usuario no está vinculado a un empleado")
 			return
 		}
 		e.EmpleadoID = i.EmpleadoID.Int64
@@ -2006,7 +2224,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 	}
 	e.Tipo = normalizarMayusculas(e.Tipo)
 	if e.Tipo != "VACACIONES" && e.Tipo != "ENFERMEDAD" && e.Tipo != "DESCANSO" && e.Tipo != "PERMISO_EXTRAORDINARIO" {
-		responderError(c, 400, "tipo de solicitud invÃ¡lido")
+		responderError(c, 400, "tipo de solicitud inválido")
 		return
 	}
 	motivo, err := textoRequerido(e.Motivo, 500, "motivo")
@@ -2024,7 +2242,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 		return
 	}
 	if activo == 0 {
-		responderError(c, 400, "El empleado estÃ¡ inactivo")
+		responderError(c, 400, "El empleado está inactivo")
 		return
 	}
 	var cruces int
@@ -2039,7 +2257,7 @@ func (a *aplicacion) crearSolicitud(c *gin.Context) {
 	}
 	necesita := requiere == 1 && contieneFinDeSemana(inicio, fin)
 	if necesita && e.SuplenteID == nil {
-		responderError(c, 400, "La ausencia de un puesto crÃ­tico en fin de semana exige suplente_id calificado")
+		responderError(c, 400, "La ausencia de un puesto crítico en fin de semana exige suplente_id calificado")
 		return
 	}
 	if !necesita && e.SuplenteID != nil {
@@ -2087,11 +2305,11 @@ func (a *aplicacion) consultaSolicitudes(c *gin.Context, propias bool) {
 	args := []any{}
 	if propias {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+			responderError(c, 400, "Su usuario no está vinculado a un empleado")
 			return
 		}
-		q += " WHERE sp.empleado_id=?"
-		args = append(args, i.EmpleadoID.Int64)
+		q += " WHERE (sp.empleado_id=? OR ct.suplente_id=?)"
+		args = append(args, i.EmpleadoID.Int64, i.EmpleadoID.Int64)
 	} else if v := c.Query("estado"); v != "" {
 		q += " WHERE sp.estado=?"
 		args = append(args, normalizarMayusculas(v))
@@ -2114,7 +2332,7 @@ func (a *aplicacion) consultaSolicitudes(c *gin.Context, propias bool) {
 		}
 		var suplenteJSON any = nil
 		if suplente > 0 {
-			suplenteJSON = gin.H{"id": suplente, "nombre": supNombre, "estado": estadoCob}
+			suplenteJSON = gin.H{"id": suplente, "suplente_id": suplente, "nombre": supNombre, "estado": estadoCob}
 		}
 		respuesta = append(respuesta, gin.H{"id": id, "empleado_id": emp, "numero_empleado": numero, "empleado": nombre, "tipo": tipo, "fecha_inicio": inicio, "fecha_fin": fin, "motivo": motivo, "estado": estado, "requiere_cobertura": requiere == 1, "cobertura": suplenteJSON, "observacion_dictamen": obs, "creado_en": creado})
 	}
@@ -2205,7 +2423,7 @@ func (a *aplicacion) confirmarCobertura(c *gin.Context) {
 		return
 	}
 	estadoNuevo := "RECHAZADA"
-	solicitudNuevo := "PENDIENTE_SUPLENTE"
+	solicitudNuevo := "RECHAZADA"
 	if e.Aceptar {
 		estadoNuevo = "ACEPTADA"
 		solicitudNuevo = "PENDIENTE_APROBACION"
@@ -2218,7 +2436,15 @@ func (a *aplicacion) confirmarCobertura(c *gin.Context) {
 	defer tx.Rollback()
 	_, err = tx.Exec(`UPDATE cobertura_turnos SET estado=?,confirmado_en=CURRENT_TIMESTAMP WHERE solicitud_id=?`, estadoNuevo, id)
 	if err == nil {
-		_, err = tx.Exec(`UPDATE solicitudes_permisos SET estado=?,observacion_dictamen=? WHERE id=?`, solicitudNuevo, strings.TrimSpace(e.Comentario), id)
+		if e.Aceptar {
+			_, err = tx.Exec(`UPDATE solicitudes_permisos SET estado=?,observacion_dictamen=? WHERE id=?`, solicitudNuevo, strings.TrimSpace(e.Comentario), id)
+		} else {
+			obsRechazo := strings.TrimSpace(e.Comentario)
+			if obsRechazo == "" {
+				obsRechazo = "Cobertura rechazada por el suplente propuesto"
+			}
+			_, err = tx.Exec(`UPDATE solicitudes_permisos SET estado=?,observacion_dictamen=?,resuelto_en=CURRENT_TIMESTAMP WHERE id=?`, solicitudNuevo, obsRechazo, id)
+		}
 	}
 	if err != nil {
 		responderBD(c, err)
@@ -2260,7 +2486,7 @@ func (a *aplicacion) dictaminarSolicitud(c *gin.Context, aprobada bool) {
 		return
 	}
 	if estado != "PENDIENTE_APROBACION" {
-		responderError(c, 409, "La solicitud no estÃ¡ lista para dictamen")
+		responderError(c, 409, "La solicitud no está lista para dictamen")
 		return
 	}
 	if requiere == 1 {
@@ -2309,7 +2535,7 @@ func (a *aplicacion) sueldoEmpleado(id int64) (int64, error) {
 		return 0, err
 	}
 	if activo == 0 {
-		return 0, errors.New("El empleado estÃ¡ inactivo")
+		return 0, errors.New("El empleado está inactivo")
 	}
 	return sueldo, nil
 }
@@ -2326,7 +2552,7 @@ func (a *aplicacion) solicitarPrestamo(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !esAdministrador(i) {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+			responderError(c, 400, "Su usuario no está vinculado a un empleado")
 			return
 		}
 		e.EmpleadoID = i.EmpleadoID.Int64
@@ -2354,14 +2580,32 @@ func (a *aplicacion) solicitarPrestamo(c *gin.Context) {
 		responderError(c, 400, "El descuento semanal excede 35% del sueldo; aumente numero_semanas")
 		return
 	}
+	var pendientes int
+	if err := a.db.QueryRow(`SELECT COUNT(*) FROM prestamos_empleado WHERE empleado_id=? AND estado='PENDIENTE'`, e.EmpleadoID).Scan(&pendientes); err != nil {
+		responderBD(c, err)
+		return
+	}
+	if pendientes > 0 {
+		responderError(c, 409, "El colaborador ya tiene una solicitud de préstamo pendiente de dictamen")
+		return
+	}
+	var descuentosActuales int64
+	if err := a.db.QueryRow(`SELECT COALESCE(SUM(descuento_semanal_centavos),0) FROM prestamos_empleado WHERE empleado_id=? AND estado='APROBADO' AND saldo_centavos>0`, e.EmpleadoID).Scan(&descuentosActuales); err != nil {
+		responderBD(c, err)
+		return
+	}
+	if (descuentosActuales+descuento)*100 > sueldo*40 {
+		responderError(c, 409, "El descuento semanal sumado a los préstamos activos excedería el 40% del sueldo semanal")
+		return
+	}
 	r, err := a.db.Exec(`INSERT INTO prestamos_empleado(empleado_id,monto_original_centavos,saldo_centavos,descuento_semanal_centavos,numero_semanas,motivo,estado) VALUES (?,?,?,?,?,?,'PENDIENTE')`, e.EmpleadoID, e.MontoCentavos, e.MontoCentavos, descuento, e.NumeroSemanas, motivo)
 	if err != nil {
 		responderBD(c, err)
 		return
 	}
 	id, _ := r.LastInsertId()
-	a.registrarAuditoria(i.UsuarioID, "CREAR", "PRESTAMO", id, "Solicitud de prÃ©stamo")
-	c.JSON(201, gin.H{"id": id, "descuento_semanal_centavos": descuento, "mensaje": "Solicitud de prÃ©stamo registrada"})
+	a.registrarAuditoria(i.UsuarioID, "CREAR", "PRESTAMO", id, "Solicitud de préstamo")
+	c.JSON(201, gin.H{"id": id, "descuento_semanal_centavos": descuento, "mensaje": "Solicitud de préstamo registrada"})
 }
 func (a *aplicacion) consultaPrestamos(c *gin.Context, propios bool) {
 	i := obtenerIdentidad(c)
@@ -2369,7 +2613,7 @@ func (a *aplicacion) consultaPrestamos(c *gin.Context, propios bool) {
 	args := []any{}
 	if propios {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+			responderError(c, 400, "Su usuario no está vinculado a un empleado")
 			return
 		}
 		q += " WHERE pe.empleado_id=?"
@@ -2420,7 +2664,7 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 	var estado string
 	err := a.db.QueryRow(`SELECT empleado_id,monto_original_centavos,descuento_semanal_centavos,estado FROM prestamos_empleado WHERE id=?`, id).Scan(&empleado, &monto, &descuento, &estado)
 	if errors.Is(err, sql.ErrNoRows) {
-		responderError(c, 404, "PrÃ©stamo no encontrado")
+		responderError(c, 404, "Préstamo no encontrado")
 		return
 	}
 	if err != nil {
@@ -2428,7 +2672,7 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 		return
 	}
 	if estado != "PENDIENTE" {
-		responderError(c, 409, "El prÃ©stamo ya fue dictaminado")
+		responderError(c, 409, "El préstamo ya fue dictaminado")
 		return
 	}
 	if aprobar {
@@ -2438,12 +2682,12 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 			return
 		}
 		var descuentosActuales int64
-		if err := a.db.QueryRow(`SELECT COALESCE(SUM(descuento_semanal_centavos),0) FROM prestamos_empleado WHERE empleado_id=? AND estado='APROBADO'`, empleado).Scan(&descuentosActuales); err != nil {
+		if err := a.db.QueryRow(`SELECT COALESCE(SUM(descuento_semanal_centavos),0) FROM prestamos_empleado WHERE empleado_id=? AND estado='APROBADO' AND saldo_centavos>0`, empleado).Scan(&descuentosActuales); err != nil {
 			responderBD(c, err)
 			return
 		}
 		if (descuentosActuales+descuento)*100 > sueldo*40 {
-			responderError(c, 409, "La retenciÃ³n total activa excederÃ­a 40% del sueldo semanal")
+			responderError(c, 409, "La retención total activa excedería 40% del sueldo semanal")
 			return
 		}
 	}
@@ -2456,10 +2700,10 @@ func (a *aplicacion) dictaminarPrestamo(c *gin.Context, aprobar bool) {
 		return
 	}
 	if aprobar {
-		_ = a.registrarHistorico(empleado, "PRESTAMO", fmt.Sprintf("PrÃ©stamo aprobado por %d centavos", monto), time.Now().Format("2006-01-02"))
+		_ = a.registrarHistorico(empleado, "PRESTAMO", fmt.Sprintf("Préstamo aprobado por %d centavos", monto), time.Now().Format("2006-01-02"))
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, nuevo, "PRESTAMO", id, observacion)
-	c.JSON(200, gin.H{"estado": nuevo, "mensaje": "PrÃ©stamo " + strings.ToLower(nuevo) + " correctamente"})
+	c.JSON(200, gin.H{"estado": nuevo, "mensaje": "Préstamo " + strings.ToLower(nuevo) + " correctamente"})
 }
 func (a *aplicacion) aprobarPrestamo(c *gin.Context)  { a.dictaminarPrestamo(c, true) }
 func (a *aplicacion) rechazarPrestamo(c *gin.Context) { a.dictaminarPrestamo(c, false) }
@@ -2490,7 +2734,7 @@ func (a *aplicacion) registrarRetencion(c *gin.Context) {
 	var estado string
 	err = tx.QueryRow(`SELECT saldo_centavos,descuento_semanal_centavos,estado FROM prestamos_empleado WHERE id=?`, id).Scan(&saldo, &descuento, &estado)
 	if errors.Is(err, sql.ErrNoRows) {
-		responderError(c, 404, "PrÃ©stamo no encontrado")
+		responderError(c, 404, "Préstamo no encontrado")
 		return
 	}
 	if err != nil {
@@ -2498,7 +2742,7 @@ func (a *aplicacion) registrarRetencion(c *gin.Context) {
 		return
 	}
 	if estado != "APROBADO" {
-		responderError(c, 409, "Solo se pueden retener prÃ©stamos aprobados")
+		responderError(c, 409, "Solo se pueden retener préstamos aprobados")
 		return
 	}
 	monto := descuento
@@ -2511,7 +2755,7 @@ func (a *aplicacion) registrarRetencion(c *gin.Context) {
 	}
 	_, err = tx.Exec(`INSERT INTO retenciones_prestamo(prestamo_id,semana_inicio,monto_centavos) VALUES (?,?,?)`, id, semana, monto)
 	if err != nil {
-		responderError(c, 409, "Ya existe una retenciÃ³n para esa semana")
+		responderError(c, 409, "Ya existe una retención para esa semana")
 		return
 	}
 	nuevoSaldo := saldo - monto
@@ -2565,7 +2809,7 @@ func (a *aplicacion) crearBolsaPropinas(c *gin.Context) {
 		return
 	}
 	if activo == 0 {
-		responderError(c, 400, "La sucursal estÃ¡ inactiva")
+		responderError(c, 400, "La sucursal está inactiva")
 		return
 	}
 	r, err := a.db.Exec(`INSERT INTO propinas_bolsas(sucursal_id,fecha,monto_centavos) VALUES (?,?,?)`, e.SucursalID, e.Fecha, e.MontoCentavos)
@@ -2582,7 +2826,7 @@ func (a *aplicacion) listarBolsasPropinas(c *gin.Context) {
 	args := []any{}
 	if f := c.Query("fecha"); f != "" {
 		if _, err := fechaValida(f); err != nil {
-			responderError(c, 400, "fecha no tiene formato vÃ¡lido")
+			responderError(c, 400, "fecha no tiene formato válido")
 			return
 		}
 		q += " WHERE b.fecha=?"
@@ -2634,7 +2878,7 @@ func (a *aplicacion) calcularPropinas(c *gin.Context) {
 		responderError(c, 409, "No se puede recalcular una bolsa cerrada")
 		return
 	}
-	filas, err := tx.Query(`SELECT t.empleado_id,t.horas_trabajadas*p.factor_propina FROM turnos t JOIN empleados e ON e.id=t.empleado_id JOIN puestos p ON p.id=e.puesto_id WHERE e.sucursal_id=? AND t.fecha=? AND t.estado='TRABAJADO' AND t.horas_trabajadas>0 ORDER BY t.empleado_id`, sucursal, fecha)
+	filas, err := tx.Query(`SELECT t.empleado_id,SUM(t.horas_trabajadas)*p.factor_propina FROM turnos t JOIN empleados e ON e.id=t.empleado_id JOIN puestos p ON p.id=e.puesto_id WHERE e.sucursal_id=? AND t.fecha=? AND t.estado IN ('TRABAJADO','RETARDO') AND t.horas_trabajadas>0 GROUP BY t.empleado_id ORDER BY t.empleado_id`, sucursal, fecha)
 	if err != nil {
 		responderBD(c, err)
 		return
@@ -2690,7 +2934,7 @@ func (a *aplicacion) calcularPropinas(c *gin.Context) {
 func (a *aplicacion) misPropinas(c *gin.Context) {
 	i := obtenerIdentidad(c)
 	if !i.EmpleadoID.Valid {
-		responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+		responderError(c, 400, "Su usuario no está vinculado a un empleado")
 		return
 	}
 	filas, err := a.db.Query(`SELECT pa.id,b.id,b.fecha,s.nombre,pa.horas_ponderadas,pa.monto_centavos FROM propinas_asignacion pa JOIN propinas_bolsas b ON b.id=pa.bolsa_id JOIN sucursales s ON s.id=b.sucursal_id WHERE pa.empleado_id=? ORDER BY b.fecha DESC`, i.EmpleadoID.Int64)
@@ -2736,11 +2980,11 @@ func (a *aplicacion) enviarBuzon(c *gin.Context) {
 		e.Prioridad = "MEDIA"
 	}
 	if !tipoBuzonValido(e.Tipo) {
-		responderError(c, 400, "tipo de buzÃ³n invÃ¡lido")
+		responderError(c, 400, "tipo de buzón inválido")
 		return
 	}
 	if !prioridadValida(e.Prioridad) {
-		responderError(c, 400, "prioridad invÃ¡lida")
+		responderError(c, 400, "prioridad inválida")
 		return
 	}
 	asunto, err := textoRequerido(e.Asunto, 150, "asunto")
@@ -2769,7 +3013,7 @@ func (a *aplicacion) enviarBuzon(c *gin.Context) {
 	}
 	id, _ := r.LastInsertId()
 	a.registrarAuditoria(i.UsuarioID, "CREAR", "BUZON", id, e.Tipo)
-	c.JSON(201, gin.H{"id": id, "anonimo": e.Anonimo, "mensaje": "Reporte enviado al buzÃ³n"})
+	c.JSON(201, gin.H{"id": id, "anonimo": e.Anonimo, "mensaje": "Reporte enviado al buzón"})
 }
 func (a *aplicacion) consultaBuzon(c *gin.Context, propios bool) {
 	i := obtenerIdentidad(c)
@@ -2777,7 +3021,7 @@ func (a *aplicacion) consultaBuzon(c *gin.Context, propios bool) {
 	args := []any{}
 	if propios {
 		if !i.EmpleadoID.Valid {
-			responderError(c, 400, "Su usuario no estÃ¡ vinculado a un empleado")
+			responderError(c, 400, "Su usuario no está vinculado a un empleado")
 			return
 		}
 		q += " WHERE b.empleado_id=? AND b.anonimo=0"
@@ -2827,7 +3071,7 @@ func (a *aplicacion) atenderBuzon(c *gin.Context) {
 	}
 	e.Estado = normalizarMayusculas(e.Estado)
 	if e.Estado != "EN_REVISION" && e.Estado != "ATENDIDO" && e.Estado != "CERRADO" {
-		responderError(c, 400, "estado invÃ¡lido; use EN_REVISION, ATENDIDO o CERRADO")
+		responderError(c, 400, "estado inválido; use EN_REVISION, ATENDIDO o CERRADO")
 		return
 	}
 	respuesta := strings.TrimSpace(e.Respuesta)
@@ -2842,7 +3086,7 @@ func (a *aplicacion) atenderBuzon(c *gin.Context) {
 	}
 	afectadas, _ := r.RowsAffected()
 	if afectadas == 0 {
-		responderError(c, 404, "Reporte de buzÃ³n no encontrado")
+		responderError(c, 404, "Reporte de buzón no encontrado")
 		return
 	}
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "ATENDER", "BUZON", id, e.Estado)
@@ -2872,7 +3116,7 @@ func (a *aplicacion) crearHistorico(c *gin.Context) {
 	}
 	e.Tipo = normalizarMayusculas(e.Tipo)
 	if !tipoHistoricoValido(e.Tipo) {
-		responderError(c, 400, "tipo de incidencia invÃ¡lido")
+		responderError(c, 400, "tipo de incidencia inválido")
 		return
 	}
 	desc, err := textoRequerido(e.Descripcion, 1000, "descripcion")
@@ -2891,7 +3135,7 @@ func (a *aplicacion) crearHistorico(c *gin.Context) {
 	}
 	id, _ := r.LastInsertId()
 	a.registrarAuditoria(obtenerIdentidad(c).UsuarioID, "CREAR", "HISTORICO_INCIDENCIA", id, e.Tipo)
-	c.JSON(201, gin.H{"id": id, "mensaje": "Incidencia registrada; el histÃ³rico es inmutable"})
+	c.JSON(201, gin.H{"id": id, "mensaje": "Incidencia registrada; el histórico es inmutable"})
 }
 func (a *aplicacion) listarHistorico(c *gin.Context) {
 	q := `SELECT h.id,h.empleado_id,COALESCE(e.numero_empleado,''),COALESCE(e.nombres||' '||e.apellido_paterno,''),h.tipo,h.descripcion,h.fecha_evento,h.creado_en FROM historico_incidencias h LEFT JOIN empleados e ON e.id=h.empleado_id`
@@ -2899,7 +3143,7 @@ func (a *aplicacion) listarHistorico(c *gin.Context) {
 	if emp := c.Query("empleado_id"); emp != "" {
 		id, err := strconv.ParseInt(emp, 10, 64)
 		if err != nil || id <= 0 {
-			responderError(c, 400, "empleado_id invÃ¡lido")
+			responderError(c, 400, "empleado_id inválido")
 			return
 		}
 		q += " WHERE h.empleado_id=?"
@@ -2934,7 +3178,7 @@ func (a *aplicacion) reporteAusentismo(c *gin.Context) {
 	}
 	d, err := fechaValida(desde)
 	if err != nil {
-		responderError(c, 400, "desde no tiene formato vÃ¡lido")
+		responderError(c, 400, "desde no tiene formato válido")
 		return
 	}
 	h, err := fechaValida(hasta)

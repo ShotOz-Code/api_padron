@@ -152,10 +152,28 @@ export default function KardexEmpleadoView({
   const nombreCompleto = `${empleado.nombres} ${empleado.apellido_paterno} ${empleado.apellido_materno || ''}`.trim();
   const mesesAntiguedad = Math.floor(estadisticas.dias_antiguedad / 30);
 
-  // Vacantes disponibles más la actualmente asignada a este empleado
-  const vacantesOpciones = vacantes.filter(
-    (v) => v.estado === 'DISPONIBLE' || v.id === empleado.vacante_id
-  );
+  // Un empleado solo puede tener un puesto/plaza a la vez:
+  // Si ya tiene una vacante asignada, solo puede mantenerla o liberarla (0).
+  // Si no tiene vacante asignada, puede elegir entre las vacantes DISPONIBLE.
+  const vacantesOpciones = empleado.vacante_id
+    ? vacantes.filter((v) => v.id === empleado.vacante_id)
+    : vacantes.filter((v) => v.estado === 'DISPONIBLE');
+
+  const handleVacanteChange = (nuevoVacanteId: number) => {
+    if (nuevoVacanteId > 0) {
+      const vac = vacantes.find((v) => v.id === nuevoVacanteId);
+      if (vac) {
+        setEditData((prev) => ({
+          ...prev,
+          vacante_id: nuevoVacanteId,
+          puesto_id: vac.puesto_id,
+          sucursal_id: vac.sucursal_id,
+        }));
+        return;
+      }
+    }
+    setEditData((prev) => ({ ...prev, vacante_id: 0 }));
+  };
 
   return (
     <div className="bg-white border border-stone-200/90 rounded-2xl shadow-xs overflow-hidden space-y-5 p-5 sm:p-7">
@@ -331,6 +349,7 @@ export default function KardexEmpleadoView({
               <Select
                 label="Puesto de Trabajo *"
                 value={editData.puesto_id}
+                disabled={editData.vacante_id > 0}
                 onChange={(e) => setEditData((prev) => ({ ...prev, puesto_id: Number(e.target.value) }))}
                 required
               >
@@ -344,6 +363,7 @@ export default function KardexEmpleadoView({
               <Select
                 label="Sucursal Asignada *"
                 value={editData.sucursal_id}
+                disabled={editData.vacante_id > 0}
                 onChange={(e) => setEditData((prev) => ({ ...prev, sucursal_id: Number(e.target.value) }))}
                 required
               >
@@ -359,9 +379,9 @@ export default function KardexEmpleadoView({
               <Select
                 label="Vacante / Plaza Asignada"
                 value={editData.vacante_id}
-                onChange={(e) => setEditData((prev) => ({ ...prev, vacante_id: Number(e.target.value) }))}
+                onChange={(e) => handleVacanteChange(Number(e.target.value))}
               >
-                <option value={0}>Sin vacante específica asignada</option>
+                <option value={0}>Sin vacante específica asignada (Liberar plaza)</option>
                 {vacantesOpciones.map((v) => (
                   <option key={v.id} value={v.id}>
                     {v.codigo} — {v.titulo} ({v.sucursal})
