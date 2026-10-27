@@ -253,6 +253,14 @@ export default function GestionVacantes() {
     return cumpleEstado && cumpleSucursal;
   });
 
+  // Un empleado solamente puede tener un puesto/plaza a la vez:
+  // Separamos a los colaboradores sin plaza activa de los que ya ocupan una plaza
+  const tienePlazaActiva = (emp: Empleado) =>
+    Boolean(emp.vacante_id && emp.vacante_id > 0) ||
+    vacantes.some((v) => v.estado === 'CUBIERTA' && v.empleado_id === emp.id);
+
+  const empleadosDisponibles = empleados.filter((emp) => !tienePlazaActiva(emp));
+
   return (
     <div className="space-y-4">
       {/* Cabecera */}
@@ -401,7 +409,7 @@ export default function GestionVacantes() {
                             size="sm"
                             onClick={() => {
                               setModalAsignar(v);
-                              if (empleados.length > 0) setEmpleadoSeleccionadoId(empleados[0].id);
+                              setEmpleadoSeleccionadoId(empleadosDisponibles[0]?.id || 0);
                             }}
                           >
                             <IconUsers size={13} />
@@ -509,7 +517,7 @@ export default function GestionVacantes() {
                     onChange={(e) => setFormData((prev) => ({ ...prev, estado: e.target.value as any }))}
                   >
                     <option value="DISPONIBLE">DISPONIBLE</option>
-                    <option value="CUBIERTA">CUBIERTA</option>
+                    {vacanteEditando.empleado_id && <option value="CUBIERTA">CUBIERTA</option>}
                     <option value="PAUSADA">PAUSADA</option>
                     <option value="CANCELADA">CANCELADA</option>
                   </Select>
@@ -670,15 +678,25 @@ export default function GestionVacantes() {
             </p>
 
             <form onSubmit={handleAsignar} className="space-y-4 text-xs">
+              {empleadosDisponibles.length === 0 && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium">
+                  Todos los colaboradores activos ya tienen un puesto asignado. Un empleado solamente puede tener un puesto a la vez; primero libera la plaza actual del colaborador o registra un nuevo empleado.
+                </div>
+              )}
+
               <Select
-                label="Colaborador de la Plantilla *"
+                label="Colaborador Disponible (Sin Plaza Activa) *"
                 value={empleadoSeleccionadoId}
                 onChange={(e) => setEmpleadoSeleccionadoId(Number(e.target.value))}
+                disabled={empleadosDisponibles.length === 0}
                 required
               >
-                {empleados.map((emp) => (
+                {empleadosDisponibles.length === 0 && (
+                  <option value={0}>No hay colaboradores sin puesto asignado</option>
+                )}
+                {empleadosDisponibles.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.nombres} {emp.apellido_paterno} (Nómina: {emp.numero_empleado} — {emp.puesto})
+                    {emp.nombres} {emp.apellido_paterno} (Nómina: {emp.numero_empleado})
                   </option>
                 ))}
               </Select>
@@ -687,7 +705,12 @@ export default function GestionVacantes() {
                 <Button type="button" variant="outline" size="sm" onClick={() => setModalAsignar(null)}>
                   Cancelar
                 </Button>
-                <Button type="submit" variant="primary" size="sm" disabled={asignando}>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={asignando || empleadosDisponibles.length === 0 || !empleadoSeleccionadoId}
+                >
                   {asignando ? 'Asignando...' : 'Confirmar Asignación'}
                 </Button>
               </div>

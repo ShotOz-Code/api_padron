@@ -37,7 +37,8 @@ export default function Permisos() {
   const esJefe = rol === 'ENCARGADO';
   const esGestion = esRH || esJefe;
 
-  const hoyStr = new Date().toISOString().split('T')[0];
+  const hoyLocal = new Date();
+  const hoyStr = `${hoyLocal.getFullYear()}-${String(hoyLocal.getMonth() + 1).padStart(2, '0')}-${String(hoyLocal.getDate()).padStart(2, '0')}`;
 
   const [solicitudes, setSolicitudes] = useState<SolicitudPermiso[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
@@ -79,7 +80,7 @@ export default function Permisos() {
     try {
       const [perms, emps, listPuestos, perfil] = await Promise.all([
         esGestion ? PermisosService.obtenerTodos().catch(() => PermisosService.obtenerMios()) : PermisosService.obtenerMios(),
-        esGestion ? EmpleadosService.obtenerTodos({ activo: true }).catch(() => []) : Promise.resolve([]),
+        EmpleadosService.obtenerTodos({ activo: true }).catch(() => []),
         CatalogosService.obtenerPuestos().catch(() => []),
         PerfilService.obtenerPerfil().catch(() => null),
       ]);
@@ -113,10 +114,7 @@ export default function Permisos() {
   const esFinDeSemana = tocaFinDeSemana(fechaInicio, fechaFin);
   const requiereCobertura = Boolean(
     empleadoSeleccionado &&
-      (puestoSeleccionado?.es_critico ||
-        empleadoSeleccionado.puesto.toLowerCase().includes('parrillero') ||
-        empleadoSeleccionado.puesto.toLowerCase().includes('cocin') ||
-        empleadoSeleccionado.puesto_id === 2) &&
+      puestoSeleccionado?.requiere_suplente &&
       esFinDeSemana
   );
 
@@ -376,11 +374,12 @@ export default function Permisos() {
                   ) : filtradas.length > 0 ? (
                     filtradas.map((item) => {
                       const esPendiente = item.estado.startsWith('PENDIENTE');
-                      const esMiSuplencia =
+                      const esMiSuplencia = Boolean(
                         item.cobertura &&
-                        miEmpleadoId &&
-                        item.cobertura.suplente_id === miEmpleadoId &&
-                        item.estado === 'PENDIENTE_SUPLENTE';
+                          miEmpleadoId &&
+                          (item.cobertura.suplente_id === miEmpleadoId || item.cobertura.id === miEmpleadoId) &&
+                          item.estado === 'PENDIENTE_SUPLENTE'
+                      );
 
                       return (
                         <tr key={item.id} className="hover:bg-amber-100/60 transition-colors even:bg-amber-50/40">
@@ -463,7 +462,7 @@ export default function Permisos() {
                               )}
 
                               {/* Cancelar por dueño de solicitud */}
-                              {esPendiente && (
+                              {esPendiente && (esGestion || item.empleado_id === miEmpleadoId) && (
                                 <Button variant="ghost" size="sm" onClick={() => cancelar(item.id)}>
                                   Cancelar
                                 </Button>

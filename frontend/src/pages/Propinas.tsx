@@ -6,6 +6,7 @@ import {
   CatalogosService,
   obtenerRol,
   type BolsaPropinas,
+  type PropinaPropia,
   type Sucursal,
   type Rol,
   estaAutenticado,
@@ -19,9 +20,11 @@ export default function Propinas() {
   const rol = (obtenerRol() || 'OPERATIVO') as Rol;
   const esGestion = rol === 'RH_ADMIN' || rol === 'ENCARGADO';
 
-  const hoyStr = new Date().toISOString().split('T')[0];
+  const hoyLocal = new Date();
+  const hoyStr = `${hoyLocal.getFullYear()}-${String(hoyLocal.getMonth() + 1).padStart(2, '0')}-${String(hoyLocal.getDate()).padStart(2, '0')}`;
 
   const [bolsas, setBolsas] = useState<BolsaPropinas[]>([]);
+  const [misPropinas, setMisPropinas] = useState<PropinaPropia[]>([]);
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -37,16 +40,21 @@ export default function Propinas() {
   const cargarDatos = async () => {
     setCargando(true);
     try {
-      const [listBolsas, listSuc] = await Promise.all([
-        PropinasService.obtenerBolsas().catch(() => []),
-        esGestion ? CatalogosService.obtenerSucursales().catch(() => []) : Promise.resolve([]),
-      ]);
-      setBolsas(listBolsas);
-      const activas = listSuc.filter((s) => s.activo);
-      setSucursales(activas);
-      if (activas.length > 0) setSucursalId(activas[0].id);
+      if (esGestion) {
+        const [listBolsas, listSuc] = await Promise.all([
+          PropinasService.obtenerBolsas().catch(() => []),
+          CatalogosService.obtenerSucursales().catch(() => []),
+        ]);
+        setBolsas(listBolsas);
+        const activas = listSuc.filter((s) => s.activo);
+        setSucursales(activas);
+        if (activas.length > 0) setSucursalId(activas[0].id);
+      } else {
+        const mias = await PropinasService.obtenerMias().catch(() => []);
+        setMisPropinas(mias);
+      }
     } catch (err: any) {
-      setFeedback({ tipo: 'error', texto: err.message || 'Error al cargar bolsas' });
+      setFeedback({ tipo: 'error', texto: err.message || 'Error al cargar propinas' });
     } finally {
       setCargando(false);
     }
@@ -116,7 +124,9 @@ export default function Propinas() {
     }
   };
 
-  const totalDistribuido = bolsas.reduce((acc, curr) => acc + curr.monto_centavos, 0);
+  const totalDistribuido = esGestion
+    ? bolsas.reduce((acc, curr) => acc + curr.monto_centavos, 0)
+    : misPropinas.reduce((acc, curr) => acc + curr.monto_centavos, 0);
 
   return (
     <div className="min-h-screen bg-[#faf7f2] text-stone-900 flex flex-col font-sans">
@@ -133,7 +143,7 @@ export default function Propinas() {
                   <span>Control de Propinas</span>
                 </h1>
                 <Badge variant={esGestion ? 'warning' : 'neutral'}>
-                  {esGestion ? 'Gestión de Reparto' : 'Consulta'}
+                  {esGestion ? 'Gestión de Reparto' : 'Mis Propinas'}
                 </Badge>
               </div>
               <p className="text-xs text-stone-500 font-medium mt-0.5">
@@ -177,59 +187,67 @@ export default function Propinas() {
           {/* Cards de Métricas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 my-2">
             <div className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Bolsas Registradas</span>
-              <p className="text-2xl font-bold text-stone-900 mt-1">{bolsas.length}</p>
+              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                {esGestion ? 'Bolsas Registradas' : 'Repartos Recibidos'}
+              </span>
+              <p className="text-2xl font-bold text-stone-900 mt-1">
+                {esGestion ? bolsas.length : misPropinas.length}
+              </p>
               <span className="text-xs text-stone-400 mt-0.5 block">Historial de turnos</span>
             </div>
             <div className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Monto Total Distribuido</span>
+              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                {esGestion ? 'Monto Total Distribuido' : 'Mis Propinas Acumuladas'}
+              </span>
               <p className="text-2xl font-bold text-amber-900 font-mono mt-1">
                 ${(totalDistribuido / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </p>
-              <span className="text-xs text-stone-400 mt-0.5 block">Repartido entre colaboradores</span>
+              <span className="text-xs text-stone-400 mt-0.5 block">
+                {esGestion ? 'Repartido entre colaboradores' : 'Asignado por tus turnos trabajados'}
+              </span>
             </div>
           </div>
 
-          {/* Tabla de Bolsas */}
+          {/* Tabla de Bolsas / Mis Propinas */}
           <div className="rounded-2xl border border-stone-200/90 bg-white overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-amber-50/70 border-b border-amber-200/60 text-stone-700 font-semibold uppercase text-[11px]">
-                    <th className="py-3 px-3.5">ID</th>
-                    <th className="py-3 px-3.5">Sucursal</th>
-                    <th className="py-3 px-3.5">Fecha</th>
-                    <th className="py-3 px-3.5">Monto de Bolsa</th>
-                    <th className="py-3 px-3.5">Estado</th>
-                    <th className="py-3 px-3.5">Asignaciones</th>
-                    {esGestion && <th className="py-3 px-3.5 text-right">Acción</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
-                  {cargando ? (
-                    <tr>
-                      <td colSpan={esGestion ? 7 : 6}>
-                        <LoadingState message="Cargando bolsas de propinas..." />
-                      </td>
+              {esGestion ? (
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-amber-50/70 border-b border-amber-200/60 text-stone-700 font-semibold uppercase text-[11px]">
+                      <th className="py-3 px-3.5">ID</th>
+                      <th className="py-3 px-3.5">Sucursal</th>
+                      <th className="py-3 px-3.5">Fecha</th>
+                      <th className="py-3 px-3.5">Monto de Bolsa</th>
+                      <th className="py-3 px-3.5">Estado</th>
+                      <th className="py-3 px-3.5">Asignaciones</th>
+                      <th className="py-3 px-3.5 text-right">Acción</th>
                     </tr>
-                  ) : bolsas.length > 0 ? (
-                    bolsas.map((item) => (
-                      <tr key={item.id} className="hover:bg-amber-50/40 transition-colors">
-                        <td className="py-3 px-3.5 text-stone-500 font-mono font-medium">#{item.id}</td>
-                        <td className="py-3 px-3.5 font-semibold text-stone-900">{item.sucursal}</td>
-                        <td className="py-3 px-3.5 text-stone-700 font-medium">{item.fecha}</td>
-                        <td className="py-3 px-3.5 font-mono font-semibold text-stone-900">
-                          ${(item.monto_centavos / 100).toFixed(2)}
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {cargando ? (
+                      <tr>
+                        <td colSpan={7}>
+                          <LoadingState message="Cargando bolsas de propinas..." />
                         </td>
-                        <td className="py-3 px-3.5">
-                          <Badge variant={item.estado === 'CALCULADA' ? 'success' : 'warning'}>
-                            {item.estado}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-3.5 text-stone-700 font-normal">
-                          {item.asignaciones > 0 ? `${item.asignaciones} colaboradores` : 'Pendiente de cálculo'}
-                        </td>
-                        {esGestion && (
+                      </tr>
+                    ) : bolsas.length > 0 ? (
+                      bolsas.map((item) => (
+                        <tr key={item.id} className="hover:bg-amber-50/40 transition-colors">
+                          <td className="py-3 px-3.5 text-stone-500 font-mono font-medium">#{item.id}</td>
+                          <td className="py-3 px-3.5 font-semibold text-stone-900">{item.sucursal}</td>
+                          <td className="py-3 px-3.5 text-stone-700 font-medium">{item.fecha}</td>
+                          <td className="py-3 px-3.5 font-mono font-semibold text-stone-900">
+                            ${(item.monto_centavos / 100).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3.5">
+                            <Badge variant={item.estado === 'CALCULADA' ? 'success' : 'warning'}>
+                              {item.estado}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-3.5 text-stone-700 font-normal">
+                            {item.asignaciones > 0 ? `${item.asignaciones} colaboradores` : 'Pendiente de cálculo'}
+                          </td>
                           <td className="py-3 px-3.5 text-right">
                             <Button
                               variant="secondary"
@@ -239,21 +257,63 @@ export default function Propinas() {
                               {item.estado === 'CALCULADA' ? 'Recalcular' : 'Distribuir'}
                             </Button>
                           </td>
-                        )}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="p-4">
+                          <EmptyState
+                            title="Sin bolsas registradas"
+                            description="Aún no se han registrado bolsas de propinas para esta sucursal."
+                          />
+                        </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={esGestion ? 7 : 6} className="p-4">
-                        <EmptyState
-                          title="Sin bolsas registradas"
-                          description="Aún no se han registrado bolsas de propinas para esta sucursal."
-                        />
-                      </td>
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-amber-50/70 border-b border-amber-200/60 text-stone-700 font-semibold uppercase text-[11px]">
+                      <th className="py-3 px-3.5">Bolsa</th>
+                      <th className="py-3 px-3.5">Sucursal</th>
+                      <th className="py-3 px-3.5">Fecha</th>
+                      <th className="py-3 px-3.5">Puntos / Horas Ponderadas</th>
+                      <th className="py-3 px-3.5 text-right">Monto Asignado</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {cargando ? (
+                      <tr>
+                        <td colSpan={5}>
+                          <LoadingState message="Cargando tus propinas asignadas..." />
+                        </td>
+                      </tr>
+                    ) : misPropinas.length > 0 ? (
+                      misPropinas.map((item) => (
+                        <tr key={item.id} className="hover:bg-amber-50/40 transition-colors">
+                          <td className="py-3 px-3.5 text-stone-500 font-mono font-medium">#{item.bolsa_id}</td>
+                          <td className="py-3 px-3.5 font-semibold text-stone-900">{item.sucursal}</td>
+                          <td className="py-3 px-3.5 text-stone-700 font-medium">{item.fecha}</td>
+                          <td className="py-3 px-3.5 font-mono text-stone-700">{item.horas_ponderadas.toFixed(2)} pts</td>
+                          <td className="py-3 px-3.5 font-mono font-bold text-emerald-700 text-right">
+                            ${(item.monto_centavos / 100).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="p-4">
+                          <EmptyState
+                            title="Sin propinas asignadas"
+                            description="Aún no tienes propinas distribuidas en tus turnos trabajados."
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 

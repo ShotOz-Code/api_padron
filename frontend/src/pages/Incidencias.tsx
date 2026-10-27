@@ -20,7 +20,8 @@ const TIPOS_INCIDENCIA = [
 
 export default function Incidencias() {
   const navigate = useNavigate();
-  const hoyStr = new Date().toISOString().split('T')[0];
+  const hoyLocal = new Date();
+  const hoyStr = `${hoyLocal.getFullYear()}-${String(hoyLocal.getMonth() + 1).padStart(2, '0')}-${String(hoyLocal.getDate()).padStart(2, '0')}`;
 
   const [incidencias, setIncidencias] = useState<IncidenciaHistorica[]>([]);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);

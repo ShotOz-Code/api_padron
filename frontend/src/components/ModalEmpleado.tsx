@@ -17,7 +17,8 @@ interface ModalEmpleadoProps {
 }
 
 export default function ModalEmpleado({ isOpen, onClose, onEmpleadoCreado }: ModalEmpleadoProps) {
-  const hoyStr = new Date().toISOString().split('T')[0];
+  const hoyLocal = new Date();
+  const hoyStr = `${hoyLocal.getFullYear()}-${String(hoyLocal.getMonth() + 1).padStart(2, '0')}-${String(hoyLocal.getDate()).padStart(2, '0')}`;
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [puestos, setPuestos] = useState<Puesto[]>([]);
   const [vacantes, setVacantes] = useState<Vacante[]>([]);
@@ -367,6 +368,7 @@ export default function ModalEmpleado({ isOpen, onClose, onEmpleadoCreado }: Mod
             label="Sucursal *"
             name="sucursal_id"
             value={formData.sucursal_id}
+            disabled={Number(formData.vacante_id) > 0}
             onChange={handleChange}
           >
             {sucursales.map((s) => (
@@ -380,6 +382,7 @@ export default function ModalEmpleado({ isOpen, onClose, onEmpleadoCreado }: Mod
             label="Puesto Asignado *"
             name="puesto_id"
             value={formData.puesto_id}
+            disabled={Number(formData.vacante_id) > 0}
             onChange={handleChange}
           >
             {puestos.map((p) => (

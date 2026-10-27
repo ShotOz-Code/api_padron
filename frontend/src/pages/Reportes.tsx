@@ -14,11 +14,18 @@ import { IconBarChart, IconCalendar, IconRefresh, IconBanknote, IconSearch, Icon
 
 type TipoReporte = 'ausentismo' | 'rotacion' | 'retenciones';
 
+function formatearFechaLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function obtenerLunes(fechaStr: string): string {
   const d = new Date(fechaStr + 'T00:00:00');
   const dia = d.getDay();
   const diff = d.getDate() - dia + (dia === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+  return formatearFechaLocal(new Date(d.getFullYear(), d.getMonth(), diff));
 }
 
 export default function Reportes() {
@@ -29,16 +36,17 @@ export default function Reportes() {
 
   // Fechas ausentismo
   const hoy = new Date();
-  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+  const hoyStr = formatearFechaLocal(hoy);
+  const primerDiaMes = formatearFechaLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
   const [desde, setDesde] = useState(primerDiaMes);
-  const [hasta, setHasta] = useState(hoy.toISOString().split('T')[0]);
+  const [hasta, setHasta] = useState(hoyStr);
   const [datosAusentismo, setDatosAusentismo] = useState<ReporteAusentismoItem[]>([]);
 
   // Rotación
   const [datosRotacion, setDatosRotacion] = useState<ReporteRotacionItem[]>([]);
 
   // Retenciones
-  const [semanaInicio, setSemanaInicio] = useState(obtenerLunes(hoy.toISOString().split('T')[0]));
+  const [semanaInicio, setSemanaInicio] = useState(obtenerLunes(hoyStr));
   const [datosRetenciones, setDatosRetenciones] = useState<ReporteRetencionItem[]>([]);
 
   useEffect(() => {
@@ -109,8 +117,8 @@ export default function Reportes() {
       if (typeof fn !== 'function') {
         throw new Error('El servicio de retenciones de nómina no está disponible en este momento.');
       }
-      const res = await fn(fechaLunes);
-      setDatosRetenciones(res || []);
+      const res: any = await fn(fechaLunes);
+      setDatosRetenciones(Array.isArray(res) ? res : (res?.retenciones || []));
     } catch (err: any) {
       setError(err?.message || 'Error al obtener retenciones de nómina');
     } finally {

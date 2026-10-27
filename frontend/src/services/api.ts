@@ -196,6 +196,7 @@ export interface SolicitudPermiso {
   requiere_cobertura: boolean;
   cobertura: {
     id: number;
+    suplente_id?: number;
     nombre: string;
     estado: string;
   } | null;
@@ -667,14 +668,16 @@ export const PrestamosService = {
       method: 'POST',
       body: JSON.stringify({ observacion }),
     }),
-  registrarRetencion: (id: number, datos: { semana_inicio: string; monto_centavos?: number }) =>
-    fetchAPI<{ monto_centavos: number; saldo_centavos: number; estado: string }>(
+  registrarRetencion: (id: number, datos: { semana_inicio: string; monto_centavos?: number } | string) => {
+    const payload = typeof datos === 'string' ? { semana_inicio: datos } : datos;
+    return fetchAPI<{ monto_centavos: number; saldo_centavos: number; estado: string }>(
       `/prestamos/${id}/registrar-retencion`,
       {
         method: 'POST',
-        body: JSON.stringify(datos),
+        body: JSON.stringify(payload),
       },
-    ),
+    );
+  },
 };
 
 export const PropinasService = {
@@ -750,6 +753,12 @@ export const BuzonService = {
     }),
 };
 
+export interface ReporteRetencionesRespuesta {
+  semana_inicio: string;
+  total_retenciones_centavos: number;
+  retenciones: ReporteRetencionItem[];
+}
+
 export const ReportesService = {
   obtenerAusentismo: (desde: string, hasta: string) =>
     fetchAPI<ReporteAusentismo>(`/reportes/ausentismo?desde=${desde}&hasta=${hasta}`),
@@ -760,7 +769,7 @@ export const ReportesService = {
   rotacionPorPuesto: () =>
     fetchAPI<ReporteRotacionItem[]>('/reportes/rotacion-por-puesto'),
   obtenerRetencionesNomina: (semanaInicio: string) =>
-    fetchAPI<ReporteRetencionItem[]>(`/reportes/retenciones-nomina?semana_inicio=${semanaInicio}`),
+    fetchAPI<ReporteRetencionesRespuesta | ReporteRetencionItem[]>(`/reportes/retenciones-nomina?semana_inicio=${semanaInicio}`),
   retencionesNomina: (semanaInicio: string) =>
-    fetchAPI<ReporteRetencionItem[]>(`/reportes/retenciones-nomina?semana_inicio=${semanaInicio}`),
+    fetchAPI<ReporteRetencionesRespuesta | ReporteRetencionItem[]>(`/reportes/retenciones-nomina?semana_inicio=${semanaInicio}`),
 };

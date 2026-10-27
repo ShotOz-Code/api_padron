@@ -15,12 +15,19 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Input, Select, Modal, Badge, EmptyState, LoadingState } from '../components/ui';
 import { IconBanknote, IconPlus, IconX, IconCheck, IconAlertTriangle } from '../components/ui/Icons';
 
+function formatearFechaLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function obtenerLunesActual(): string {
   const hoy = new Date();
   const dia = hoy.getDay();
   const diff = hoy.getDate() - dia + (dia === 0 ? -6 : 1);
-  const lunes = new Date(hoy.setDate(diff));
-  return lunes.toISOString().split('T')[0];
+  const lunes = new Date(hoy.getFullYear(), hoy.getMonth(), diff);
+  return formatearFechaLocal(lunes);
 }
 
 export default function Prestamos() {
@@ -203,7 +210,9 @@ export default function Prestamos() {
 
     setGuardandoRetencion(true);
     try {
-      await PrestamosService.registrarRetencion(modalRetencion.id, semanaInicioRetencion.trim());
+      await PrestamosService.registrarRetencion(modalRetencion.id, {
+        semana_inicio: semanaInicioRetencion.trim(),
+      });
       setFeedback({ tipo: 'ok', texto: 'Retención de nómina aplicada correctamente.' });
       setModalRetencion(null);
       cargarDatos();
